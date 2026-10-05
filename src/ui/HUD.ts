@@ -7,7 +7,7 @@ const NETWORK_LABEL: Record<NetworkStatus, string> = {
   online: 'Online',
 }
 
-const CONTROLS = 'WASD move · E interact · Space pulse (hold to fire in waves) · Tab portfolio · P sound'
+const CONTROLS = 'WASD move · E interact · Space pulse (hold to fire in waves) · Tab portfolio · T theme · P sound'
 
 /** The always-on overlay: missions, network status, interaction prompt and pulse meter. */
 export class HUD {

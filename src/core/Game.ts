@@ -31,6 +31,20 @@ const MISSION_PROJECTS = 'inspect-projects'
 const MISSION_SENTINELS = 'disable-sentinels'
 const MISSION_WAVES = 'survive-waves'
 
+type ThemeMode = 'dark' | 'light'
+const THEME_STORAGE_KEY = 'system-zero-theme'
+
+function initialTheme(): ThemeMode {
+  try {
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (saved === 'dark' || saved === 'light') return saved
+  } catch {
+    // Storage can be unavailable in a restricted browser context.
+  }
+
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+}
+
 /** Where the player begins. */
 const START = new THREE.Vector3(0, 0, 0)
 
@@ -64,6 +78,7 @@ const CONTROL_CENTER_POS = { x: 0, z: -8 }
 
 /** Owns every subsystem, wires them together, and runs the frame loop. */
 export class Game {
+  private theme: ThemeMode = initialTheme()
   private readonly renderer: Renderer
   private readonly input = new Input()
   private readonly audio = new AudioManager()
@@ -78,6 +93,7 @@ export class Game {
   private readonly network = new NetworkSystem()
 
   private readonly ui: HTMLDivElement
+  private readonly themeButton: HTMLButtonElement
   private readonly hud: HUD
   /** The big popup, for both projects and slide stops. */
   private readonly popup: MediaPopup
@@ -107,6 +123,14 @@ export class Game {
     this.ui = document.createElement('div')
     this.ui.className = 'ui-layer'
     root.append(this.ui)
+
+    this.themeButton = document.createElement('button')
+    this.themeButton.type = 'button'
+    this.themeButton.className = 'theme-toggle'
+    this.themeButton.setAttribute('aria-keyshortcuts', 'T')
+    this.themeButton.addEventListener('click', this.toggleTheme)
+    this.ui.append(this.themeButton)
+    this.applyTheme(this.theme, false)
 
     this.player.position.copy(START)
     this.world.add(this.player.object)
@@ -156,6 +180,7 @@ export class Game {
     this.popup.dispose()
     this.unlock.dispose()
     this.menu.dispose()
+    this.themeButton.removeEventListener('click', this.toggleTheme)
     this.ui.remove()
 
     this.slideRide?.dispose()
@@ -183,6 +208,8 @@ export class Game {
   }
 
   private update(dt: number): void {
+    if (this.input.consume('KeyT')) this.toggleTheme()
+
     // UI first: an open popup or menu claims its keys before the player can act on them.
     this.popup.update()
     if (!this.popup.isOpen) this.menu.update()
@@ -428,5 +455,28 @@ export class Game {
 
     this.audio.play('pulse')
     this.animation.ring(this.world.scene, this.player.position, this.combat.pulseRadius, 0xff3b3b)
+  }
+
+  private readonly toggleTheme = (): void => {
+    this.applyTheme(this.theme === 'dark' ? 'light' : 'dark')
+  }
+
+  private applyTheme(mode: ThemeMode, save = true): void {
+    this.theme = mode
+    document.documentElement.dataset.theme = mode
+    this.world.environment.setTheme(mode)
+
+    const next = mode === 'dark' ? 'light' : 'dark'
+    this.themeButton.textContent = next === 'light' ? '☀ Light mode' : '☾ Dark mode'
+    this.themeButton.setAttribute('aria-label', `Switch to ${next} mode`)
+    this.themeButton.title = `Switch to ${next} mode (T)`
+
+    if (save) {
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, mode)
+      } catch {
+        // The current theme still works when persistence is unavailable.
+      }
+    }
   }
 }

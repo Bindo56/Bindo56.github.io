@@ -5,7 +5,7 @@
 const GAME_KEYS = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
-  'KeyE', 'KeyQ', 'KeyF', 'KeyM', 'KeyP', 'Space', 'Tab', 'Enter', 'Escape',
+  'KeyE', 'KeyQ', 'KeyF', 'KeyM', 'KeyP', 'KeyT', 'Space', 'Tab', 'Enter', 'Escape',
 ])
 
 /**
