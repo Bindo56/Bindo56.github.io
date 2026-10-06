@@ -1,4 +1,5 @@
-import type { Input } from '../core/Input.ts'
+/** The popup only needs one-shot key events; both game input systems implement this. */
+interface PopupInput { consume(code: string): boolean }
 
 export interface MediaPopupLink {
   label: string
@@ -138,13 +139,15 @@ function loadYouTubeApi(): Promise<YouTubeApi> {
 export class MediaPopup {
   private readonly root: HTMLDivElement
   private readonly window: HTMLDivElement
+  private readonly closeButton: HTMLButtonElement
   private readonly media: HTMLDivElement
   private readonly title: HTMLHeadingElement
   private readonly subtitle: HTMLParagraphElement
   private readonly text: HTMLDivElement
   private readonly links: HTMLDivElement
   private readonly hint: HTMLSpanElement
-  private readonly input: Input
+  private readonly input: PopupInput
+  private previousFocus: HTMLElement | null = null
 
   private onClose: (() => void) | undefined
   private player: YouTubePlayer | null = null
@@ -152,24 +155,25 @@ export class MediaPopup {
   /** Bumped on every open and close, so a video that finishes loading after its popup has gone is dropped. */
   private generation = 0
 
-  constructor(parent: HTMLElement, input: Input) {
+  constructor(parent: HTMLElement, input: PopupInput) {
     this.input = input
 
     this.root = document.createElement('div')
     this.root.className = 'media-popup'
     this.root.addEventListener('click', this.onBackdropClick)
+    this.root.addEventListener('keydown', this.onKeyDown)
 
     this.window = document.createElement('div')
     this.window.className = 'media-popup-window'
     this.window.setAttribute('role', 'dialog')
     this.window.setAttribute('aria-modal', 'true')
 
-    const closeButton = document.createElement('button')
-    closeButton.className = 'media-popup-close'
-    closeButton.type = 'button'
-    closeButton.textContent = '×'
-    closeButton.setAttribute('aria-label', 'Close')
-    closeButton.addEventListener('click', () => this.close())
+    this.closeButton = document.createElement('button')
+    this.closeButton.className = 'media-popup-close'
+    this.closeButton.type = 'button'
+    this.closeButton.textContent = '×'
+    this.closeButton.setAttribute('aria-label', 'Close')
+    this.closeButton.addEventListener('click', () => this.close())
 
     this.media = document.createElement('div')
     this.media.className = 'media-popup-media'
@@ -192,7 +196,7 @@ export class MediaPopup {
     this.hint.className = 'media-popup-hint'
 
     body.append(this.title, this.subtitle, this.text, this.links, this.hint)
-    this.window.append(closeButton, this.media, body)
+    this.window.append(this.closeButton, this.media, body)
     this.root.append(this.window)
     parent.append(this.root)
   }
@@ -203,6 +207,7 @@ export class MediaPopup {
 
   open(content: MediaPopupContent, onClose?: () => void): void {
     this.stopVideo()
+    this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const generation = ++this.generation
     this.onClose = onClose
     this.window.style.setProperty('--popup-accent', `#${content.accent.toString(16).padStart(6, '0')}`)
@@ -256,6 +261,7 @@ export class MediaPopup {
 
     this.hint.textContent = content.hint ?? '[E] Close'
     this.root.classList.add('open')
+    this.closeButton.focus({ preventScroll: true })
   }
 
   close(): void {
@@ -265,6 +271,12 @@ export class MediaPopup {
 
     // Taking the player out stops the video, and hands the keyboard back to the game if it had it.
     this.stopVideo()
+
+    const target = this.previousFocus?.isConnected && this.previousFocus !== document.body
+      ? this.previousFocus
+      : document.querySelector<HTMLCanvasElement>('canvas')
+    target?.focus({ preventScroll: true })
+    this.previousFocus = null
 
     const callback = this.onClose
     this.onClose = undefined
@@ -280,6 +292,7 @@ export class MediaPopup {
     this.generation++
     this.stopVideo()
     this.root.removeEventListener('click', this.onBackdropClick)
+    this.root.removeEventListener('keydown', this.onKeyDown)
     this.root.remove()
   }
 
@@ -350,5 +363,26 @@ export class MediaPopup {
 
   private readonly onBackdropClick = (event: MouseEvent): void => {
     if (event.target === this.root) this.close()
+  }
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === 'KeyE' || event.code === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      this.close()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const focusable = [...this.window.querySelectorAll<HTMLElement>('button, a[href], iframe')]
+    if (focusable.length === 0) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
   }
 }

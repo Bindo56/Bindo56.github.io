@@ -3,6 +3,9 @@ dist
 dist-ssr
 *.local
 *.log
+playwright-report/
+test-results/
+blob-report/
 
 .vscode/*
 !.vscode/extensions.json
