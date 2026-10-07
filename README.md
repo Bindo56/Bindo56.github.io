@@ -46,6 +46,8 @@ Touch screens show buttons for every flight action. Select a destination in the 
 - src/space/SpacePosition.ts rebases 4,096-unit sectors. src/space/SpaceSession.ts owns the ship, chase camera, deterministic stars, and planet proxies.
 - src/worlds/registry.ts is the typed source of nine slugs, positions, appearances, project keys, and lazy imports. Every placeholder module uses the prepare → mount → update → dispose contract in src/app/PlanetContracts.ts.
 
+World-specific plans: [Solar DOTS / Event Horizon](docs/SOLAR_DOTS_BUILD_PLAN.md).
+
 ## Update the portfolio
 
 - Edit original project descriptions and links in src/data/projects.ts.

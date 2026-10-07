@@ -16,6 +16,8 @@ The first release is a playable flight shell with nine honest project landings. 
 
 ## Extension order for one world
 
+The first world plan is [Solar DOTS / Event Horizon](SOLAR_DOTS_BUILD_PLAN.md).
+
 1. Write that world's gameplay and interaction plan, including its project claim and what the visitor should learn.
 2. Replace only its module in src/worlds/. Keep the registry slug and PlanetSession contract.
 3. Keep project facts and links in src/data/projects.ts; make the playable world an interpretation of the original Unity, Unreal, or SDL2 work, not a claim that those runtimes were ported.
