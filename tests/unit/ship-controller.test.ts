@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Vector3 } from 'three'
 import { IDLE_SHIP_ACTIONS, ShipController } from '../../src/space/ShipController'
 
 describe('spaceship flight', () => {
@@ -29,5 +30,33 @@ describe('spaceship flight', () => {
 
     expect(ship.position).toEqual({ sector: [1, 0, 0], local: [904, 0, 0] })
     expect(ship.velocity.length()).toBe(0)
+  })
+
+  it('rotates in yaw, pitch, and roll from sustained flight input', () => {
+    const yawShip = new ShipController()
+    const pitchShip = new ShipController()
+    const rollShip = new ShipController()
+    for (let frame = 0; frame < 30; frame++) {
+      yawShip.update(1 / 60, { ...IDLE_SHIP_ACTIONS, yaw: 1 })
+      pitchShip.update(1 / 60, { ...IDLE_SHIP_ACTIONS, pitch: 1 })
+      rollShip.update(1 / 60, { ...IDLE_SHIP_ACTIONS, roll: 1 })
+    }
+
+    const yawNose = new Vector3(0, 0, -1).applyQuaternion(yawShip.orientation)
+    const pitchNose = new Vector3(0, 0, -1).applyQuaternion(pitchShip.orientation)
+    const rollRightWing = new Vector3(1, 0, 0).applyQuaternion(rollShip.orientation)
+    expect(yawNose.x).toBeGreaterThan(0.8)
+    expect(pitchNose.y).toBeLessThan(-0.8)
+    expect(rollRightWing.y).toBeLessThan(-0.9)
+  })
+
+  it('accelerates along the new heading after the ship yaws', () => {
+    const ship = new ShipController()
+    for (let frame = 0; frame < 30; frame++) ship.update(1 / 60, { ...IDLE_SHIP_ACTIONS, yaw: 1 })
+    for (let frame = 0; frame < 60; frame++) ship.update(1 / 60, { ...IDLE_SHIP_ACTIONS, thrust: 1 })
+
+    expect(ship.velocity.x).toBeGreaterThan(15)
+    expect(ship.velocity.z).toBeLessThan(-5)
+    expect(ship.position.local[0]).toBeGreaterThan(10)
   })
 })

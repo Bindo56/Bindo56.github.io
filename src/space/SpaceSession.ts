@@ -53,6 +53,8 @@ export class SpaceSession {
   private readonly desiredCamera = new THREE.Vector3()
   private readonly cameraTarget = new THREE.Vector3()
   private readonly cameraUp = new THREE.Vector3()
+  private readonly cameraAttitude = new THREE.Quaternion()
+  private readonly forward = new THREE.Vector3()
   private readonly planetVector = new THREE.Vector3()
   private readonly currentStarCell: [number, number, number] = [NaN, NaN, NaN]
   private accumulator = 0
@@ -129,6 +131,12 @@ export class SpaceSession {
     }
   }
 
+  /** World-space direction of the ship's nose, useful for the flight HUD. */
+  getShipForward(): [number, number, number] {
+    this.forward.set(0, 0, -1).applyQuaternion(this.controller.orientation)
+    return [this.forward.x, this.forward.y, this.forward.z]
+  }
+
   distanceTo(definition: PlanetDefinition): number {
     return distanceBetweenSpacePositions(this.controller.position, definition.position)
   }
@@ -176,11 +184,15 @@ export class SpaceSession {
     this.thrusterGlows.forEach(glow => glow.scale.set(1, 1, length))
     this.engineMaterial.color.setHex(boost ? 0xffffff : 0x6cecff)
 
-    const desired = this.desiredCamera.set(0, 3.4, 11).applyQuaternion(this.controller.orientation)
-    const catchUp = dt <= 0 ? 1 : 1 - Math.exp(-5 * dt)
+    // The camera follows the craft's attitude with a small delay. A perfectly
+    // matched camera makes yaw, pitch and especially roll appear motionless.
+    const attitudeCatchUp = dt <= 0 ? 1 : 1 - Math.exp(-3.2 * dt)
+    this.cameraAttitude.slerp(this.controller.orientation, attitudeCatchUp)
+    const desired = this.desiredCamera.set(0, 3.4, 11).applyQuaternion(this.cameraAttitude)
+    const catchUp = dt <= 0 ? 1 : 1 - Math.exp(-4.5 * dt)
     this.camera.position.lerp(desired, catchUp)
-    this.cameraTarget.set(0, 0, -4).applyQuaternion(this.controller.orientation)
-    this.cameraUp.set(0, 1, 0).applyQuaternion(this.controller.orientation)
+    this.cameraTarget.set(0, 0, -4).applyQuaternion(this.cameraAttitude)
+    this.cameraUp.set(0, 1, 0).applyQuaternion(this.cameraAttitude)
     this.camera.up.copy(this.cameraUp)
     this.camera.lookAt(this.cameraTarget)
 

@@ -27,7 +27,7 @@ Run the full test command before pushing. The existing Pages workflow runs the u
 | Thrust / reverse | W / S |
 | Strafe | A / D |
 | Rise / descend | R / F |
-| Steer | Mouse drag or click to lock pointer; arrow keys |
+| Steer | Move the mouse over the view, click for pointer lock, or use arrow keys |
 | Roll | Q / E |
 | Boost / brake | Shift / Space |
 | Open project archive | Projects button, M, or Tab |

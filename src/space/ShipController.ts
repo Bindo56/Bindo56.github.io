@@ -28,8 +28,10 @@ export const IDLE_SHIP_ACTIONS: Readonly<ShipActions> = {
   brake: false,
 }
 
-const TURN_RATE = 1.55
-const ROLL_RATE = 1.9
+// An arcade ship needs a decisive turn even when the viewport steer axis is
+// only partly deflected. Rates are radians per second at full input.
+const TURN_RATE = 2.4
+const ROLL_RATE = 2.75
 const CRUISE_ACCELERATION = 42
 const BOOST_ACCELERATION = 125
 const CRUISE_MAX_SPEED = 84

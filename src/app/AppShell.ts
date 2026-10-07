@@ -67,6 +67,7 @@ export class AppShell {
   private readonly archiveButton = node('button', 'nav-button', 'Projects')
   private readonly experienceButton = node('button', 'nav-button', 'Experience')
   private readonly location = node('span', 'sector-readout', 'SECTOR 0 · 0 · 0')
+  private readonly heading = node('span', 'heading-readout', 'NOSE 0 · 0 · -1')
   private readonly portfolio: PortfolioView
   private readonly input: InputActions
   private readonly media: MediaPopup
@@ -232,8 +233,11 @@ export class AppShell {
 
     const hud = node('div', 'flight-hud')
     this.location.dataset.testid = 'ship-position'
-    const controls = node('p', 'flight-controls', 'W/S thrust · A/D strafe · R/F lift · Mouse/Arrows steer · Q/E roll · Shift boost · Space brake · Click view to steer')
-    hud.append(this.location, controls)
+    this.heading.dataset.testid = 'ship-heading'
+    const telemetry = node('div', 'flight-telemetry')
+    telemetry.append(this.location, this.heading)
+    const controls = node('p', 'flight-controls', 'W/S thrust · A/D strafe · R/F lift · Move mouse/Arrows steer · Q/E roll · Shift boost · Space brake · Click view for pointer lock')
+    hud.append(telemetry, controls)
     this.buildTouchControls()
     this.flightUi.append(hero, this.atlas, center, hud, this.touchControls)
   }
@@ -294,10 +298,17 @@ export class AppShell {
       this.planetSession.update(dt)
       this.renderer.render(this.planetSession.scene, this.planetSession.camera)
     } else {
-      this.space.update(dt, this.input.getShipActions())
+      const actions = this.input.getShipActions(dt)
+      const planet = this.approachPlanet
+      const inOrbit = planet && this.approachDistanceValue <= planet.radius + ENTER_RADIUS && this.dismissedApproach !== planet.slug
+      // Ease to a stop in landing range while preserving full steering and
+      // allowing any fresh thrust, strafe or lift input to fly away freely.
+      if (inOrbit && !actions.thrust && !actions.strafe && !actions.lift && !actions.boost) actions.brake = true
+      this.space.update(dt, actions)
       if (!this.loadingRoute) this.updateApproach()
       const position = this.space.getShipPosition()
       this.location.textContent = 'SECTOR ' + position.sector.join(' · ') + ' / ' + position.local.map(value => Math.round(value)).join(' · ')
+      this.heading.textContent = 'NOSE ' + this.space.getShipForward().map(value => value.toFixed(2)).join(' · ')
       this.renderer.render(this.space.scene, this.space.camera)
     }
   }
@@ -328,7 +339,7 @@ export class AppShell {
     if (!nearest || distance > nearest.radius + APPROACH_RADIUS) {
       this.approachPlanet = null
       this.approach.hidden = true
-      this.space.hold(false)
+      this.space.hold(this.portfolio.isOpen || this.media.isOpen)
       if (this.loader.state.status !== 'idle') this.loader.clear()
       if (distance > (nearest?.radius ?? 0) + APPROACH_RADIUS) this.dismissedApproach = null
       return
@@ -337,8 +348,7 @@ export class AppShell {
     this.approachPlanet = nearest
     this.approachDistanceValue = distance
     if (this.loader.state.planet?.slug !== nearest.slug) void this.loader.prefetch(nearest)
-    const inOrbit = distance <= nearest.radius + ENTER_RADIUS && this.dismissedApproach !== nearest.slug
-    this.space.hold(inOrbit || this.portfolio.isOpen || this.media.isOpen)
+    this.space.hold(this.portfolio.isOpen || this.media.isOpen)
     this.renderApproach()
   }
 

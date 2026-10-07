@@ -204,7 +204,9 @@ a { color: inherit; }
   color: var(--muted);
   text-shadow: 0 2px 12px var(--bg);
 }
-.sector-readout { font-size: 10px; font-weight: 900; letter-spacing: .15em; white-space: nowrap; }
+.flight-telemetry { display: grid; gap: 4px; }
+.sector-readout, .heading-readout { font-size: 10px; font-weight: 900; letter-spacing: .12em; white-space: nowrap; }
+.heading-readout { color: var(--accent); }
 .flight-controls { max-width: 700px; margin: 0; text-align: right; font-size: 10px; line-height: 1.5; letter-spacing: .025em; }
 
 .approach-card {

@@ -8,6 +8,19 @@ const flightKeys = new Set([
 ])
 
 const clamp = (value: number) => Math.max(-1, Math.min(1, value))
+const POINTER_DECAY_SECONDS = 0.16
+const POINTER_GAIN = 0.038
+
+/** A small quiet region keeps a resting cursor near the reticle from turning the ship. */
+function centeredSteer(offset: number, halfSize: number): number {
+  if (halfSize <= 0) return 0
+  const normalized = offset / halfSize
+  const magnitude = Math.abs(normalized)
+  const deadZone = 0.035
+  const fullDeflection = 0.42
+  if (magnitude <= deadZone) return 0
+  return Math.sign(normalized) * Math.min(1, (magnitude - deadZone) / (fullDeflection - deadZone))
+}
 
 /** Keyboard, pointer and touch input scoped to the visible part of the portfolio. */
 export class InputActions {
@@ -15,8 +28,10 @@ export class InputActions {
   private readonly held = new Set<string>()
   private readonly pressed = new Set<string>()
   private readonly pointerControls = new Map<number, string>()
-  private steerX = 0
-  private steerY = 0
+  private cursorSteerX = 0
+  private cursorSteerY = 0
+  private relativeSteerX = 0
+  private relativeSteerY = 0
   private dragging = false
   private lastX = 0
   private lastY = 0
@@ -30,6 +45,8 @@ export class InputActions {
     canvas.addEventListener('pointermove', this.onCanvasMove)
     canvas.addEventListener('pointerup', this.onCanvasUp)
     canvas.addEventListener('pointercancel', this.onCanvasUp)
+    canvas.addEventListener('pointerleave', this.onCanvasLeave)
+    document.addEventListener('pointerlockchange', this.onPointerLockChange)
     controlsRoot.addEventListener('pointerdown', this.onControlDown)
     controlsRoot.addEventListener('pointerup', this.onControlUp)
     controlsRoot.addEventListener('pointercancel', this.onControlUp)
@@ -44,8 +61,7 @@ export class InputActions {
     this.held.clear()
     this.pressed.clear()
     this.pointerControls.clear()
-    this.steerX = 0
-    this.steerY = 0
+    this.clearSteering()
     this.dragging = false
     if (context !== 'space' && document.pointerLockElement === this.canvas) document.exitPointerLock()
   }
@@ -56,7 +72,7 @@ export class InputActions {
     return found
   }
 
-  getShipActions(): ShipActions {
+  getShipActions(dt = 1 / 60): ShipActions {
     if (this.contextValue !== 'space') return {
       thrust: 0, strafe: 0, lift: 0, yaw: 0, pitch: 0, roll: 0, boost: false, brake: true,
     }
@@ -68,17 +84,20 @@ export class InputActions {
       thrust: axis('KeyW', 'KeyS', 'thrust', 'reverse'),
       strafe: axis('KeyD', 'KeyA', 'right', 'left'),
       lift: axis('KeyR', 'KeyF', 'up', 'down'),
-      yaw: clamp(axis('ArrowRight', 'ArrowLeft', 'yaw-right', 'yaw-left') + this.steerX),
-      pitch: clamp(axis('ArrowDown', 'ArrowUp', 'pitch-down', 'pitch-up') + this.steerY),
+      yaw: clamp(axis('ArrowRight', 'ArrowLeft', 'yaw-right', 'yaw-left') + this.cursorSteerX + this.relativeSteerX),
+      pitch: clamp(axis('ArrowDown', 'ArrowUp', 'pitch-down', 'pitch-up') + this.cursorSteerY + this.relativeSteerY),
       roll: axis('KeyE', 'KeyQ', 'roll-right', 'roll-left'),
       boost: active('ShiftLeft', 'boost') || this.held.has('ShiftRight'),
       brake: active('Space', 'brake'),
     }
-    // Pointer movement steers the current frame; keys and held touch controls persist.
-    this.steerX *= 0.55
-    this.steerY *= 0.55
-    if (Math.abs(this.steerX) < 0.01) this.steerX = 0
-    if (Math.abs(this.steerY) < 0.01) this.steerY = 0
+    // Relative motion fades by elapsed time; cursor steering stays active while
+    // the pointer is off center, like Three.js FlyControls.
+    const frame = Number.isFinite(dt) ? Math.max(0, Math.min(dt, 0.1)) : 0
+    const fade = Math.exp(-frame / POINTER_DECAY_SECONDS)
+    this.relativeSteerX *= fade
+    this.relativeSteerY *= fade
+    if (Math.abs(this.relativeSteerX) < 0.005) this.relativeSteerX = 0
+    if (Math.abs(this.relativeSteerY) < 0.005) this.relativeSteerY = 0
     return actions
   }
 
@@ -91,6 +110,8 @@ export class InputActions {
     this.canvas.removeEventListener('pointermove', this.onCanvasMove)
     this.canvas.removeEventListener('pointerup', this.onCanvasUp)
     this.canvas.removeEventListener('pointercancel', this.onCanvasUp)
+    this.canvas.removeEventListener('pointerleave', this.onCanvasLeave)
+    document.removeEventListener('pointerlockchange', this.onPointerLockChange)
     this.controlsRoot.removeEventListener('pointerdown', this.onControlDown)
     this.controlsRoot.removeEventListener('pointerup', this.onControlUp)
     this.controlsRoot.removeEventListener('pointercancel', this.onControlUp)
@@ -110,9 +131,15 @@ export class InputActions {
     this.held.clear()
     this.pressed.clear()
     this.pointerControls.clear()
-    this.steerX = 0
-    this.steerY = 0
+    this.clearSteering()
     this.dragging = false
+  }
+
+  private clearSteering(): void {
+    this.cursorSteerX = 0
+    this.cursorSteerY = 0
+    this.relativeSteerX = 0
+    this.relativeSteerY = 0
   }
 
   private readonly onCanvasDown = (event: PointerEvent): void => {
@@ -120,22 +147,43 @@ export class InputActions {
     this.dragging = true
     this.lastX = event.clientX
     this.lastY = event.clientY
+    this.cursorSteerX = 0
+    this.cursorSteerY = 0
     this.canvas.setPointerCapture(event.pointerId)
     if (event.pointerType === 'mouse' && document.pointerLockElement !== this.canvas) {
-      void this.canvas.requestPointerLock?.()
+      const lockRequest = this.canvas.requestPointerLock?.()
+      void lockRequest?.catch(() => { /* Drag remains available. */ })
     }
   }
   private readonly onCanvasMove = (event: PointerEvent): void => {
     if (this.contextValue !== 'space') return
-    if (!this.dragging && document.pointerLockElement !== this.canvas) return
-    const dx = document.pointerLockElement === this.canvas ? event.movementX : event.clientX - this.lastX
-    const dy = document.pointerLockElement === this.canvas ? event.movementY : event.clientY - this.lastY
+    if (document.pointerLockElement === this.canvas || this.dragging) {
+      const dx = document.pointerLockElement === this.canvas ? event.movementX : event.clientX - this.lastX
+      const dy = document.pointerLockElement === this.canvas ? event.movementY : event.clientY - this.lastY
+      this.relativeSteerX = clamp(this.relativeSteerX + dx * POINTER_GAIN)
+      this.relativeSteerY = clamp(this.relativeSteerY + dy * POINTER_GAIN)
+      this.cursorSteerX = 0
+      this.cursorSteerY = 0
+    } else if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+      const rect = this.canvas.getBoundingClientRect()
+      this.cursorSteerX = centeredSteer(event.clientX - rect.left - rect.width / 2, rect.width / 2)
+      this.cursorSteerY = centeredSteer(event.clientY - rect.top - rect.height / 2, rect.height / 2)
+    }
     this.lastX = event.clientX
     this.lastY = event.clientY
-    this.steerX = clamp(this.steerX + dx * 0.018)
-    this.steerY = clamp(this.steerY + dy * 0.018)
   }
   private readonly onCanvasUp = (): void => { this.dragging = false }
+  private readonly onCanvasLeave = (): void => {
+    if (document.pointerLockElement === this.canvas) return
+    this.dragging = false
+    this.clearSteering()
+  }
+  private readonly onPointerLockChange = (): void => {
+    if (document.pointerLockElement !== this.canvas) {
+      this.dragging = false
+      this.clearSteering()
+    }
+  }
 
   private readonly onControlDown = (event: PointerEvent): void => {
     const target = (event.target as HTMLElement).closest<HTMLElement>('[data-control]')
