@@ -148,6 +148,74 @@ test('theme choice survives a page refresh', async ({ page }) => {
   await expect(root).toHaveAttribute('data-theme', after)
 })
 
+test('interface theme never brightens either game scene', async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem('system-zero-theme', 'dark'))
+
+  for (const path of ['/', '/worlds/voxel/']) {
+    await page.goto(path)
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(page.locator('.space-stage canvas')).toBeVisible()
+
+    const skyColor = () => page.locator('.space-stage canvas').evaluate(canvas => {
+      const gl = canvas.getContext('webgl2')
+      if (!gl) throw new Error('Expected the game to use WebGL 2')
+      return Array.from(gl.getParameter(gl.COLOR_CLEAR_VALUE) as Float32Array).slice(0, 3)
+    })
+    const before = await skyColor()
+    expect(Math.max(...before), `${path} should have a dark sky`).toBeLessThan(0.2)
+
+    await page.getByTestId('theme-toggle').click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+    await page.evaluate(() => new Promise<void>(resolve => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    }))
+    expect(await skyColor(), `${path} sky should ignore the interface theme`).toEqual(before)
+
+    await page.getByTestId('theme-toggle').click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  }
+})
+
+test('choosing another destination reveals its travel action', async ({ page }) => {
+  await page.goto('/')
+
+  const row = page.locator('.world-row').filter({ hasText: 'Clockwork City' })
+  await row.getByRole('button', { name: 'Select Clockwork City in flight manifest' }).click()
+  await expect(row).toHaveClass(/selected/)
+  await expect(row.locator('.world-expanded')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Warp to orbit around Shardfall', includeHidden: true })).toBeHidden()
+  const warp = row.getByRole('button', { name: 'Warp to orbit around Clockwork City' })
+  await expect(warp).toBeVisible()
+  await warp.click()
+  await expect(page.getByTestId('enter-world')).toBeEnabled()
+  await expect(page.locator('.approach-card')).toContainText('Clockwork City')
+})
+
+test('mobile navigation and all destinations remain reachable', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+  const page = await context.newPage()
+  await page.goto('/')
+
+  for (const control of [page.getByTestId('portfolio-button'), page.getByTestId('contact-link'), page.getByTestId('theme-toggle')]) {
+    const box = await control.boundingBox()
+    expect(box, 'mobile header control should be visible').not.toBeNull()
+    expect(box!.x, 'mobile header control should begin inside the viewport').toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width, 'mobile header control should end inside the viewport').toBeLessThanOrEqual(390)
+  }
+
+  await page.getByTestId('portfolio-button').click()
+  await expect(page.getByTestId('portfolio-panel')).toBeVisible()
+  await page.getByRole('button', { name: 'Close portfolio' }).click()
+
+  await page.getByRole('button', { name: /Destinations/ }).click()
+  const lastRow = page.locator('.world-row').filter({ hasText: 'Material Forge' })
+  await lastRow.getByRole('button', { name: 'Select Material Forge in flight manifest' }).click()
+  await expect(lastRow.locator('.world-expanded')).toBeVisible()
+  await lastRow.getByRole('button', { name: 'Warp to orbit around Material Forge' }).click()
+  await expect(page.getByTestId('enter-world')).toBeEnabled()
+  await context.close()
+})
+
 test('project information remains usable when WebGL is unavailable', async ({ page }) => {
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext

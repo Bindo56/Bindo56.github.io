@@ -23,7 +23,6 @@ export interface PlanetSession {
   scene: Scene
   camera: Camera
   update(dt: number): void
-  setTheme(mode: ThemeMode): void
   dispose(): void
 }
 

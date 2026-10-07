@@ -12,6 +12,34 @@ import type { PlanetDefinition, PlanetSession, ThemeMode } from './PlanetContrac
 const THEME_KEY = 'system-zero-theme'
 const APPROACH_RADIUS = 180
 const ENTER_RADIUS = 115
+const WORLD_TAGS: Record<string, string> = {
+  voxel: 'VOXEL / ECS',
+  'npc-ecs': 'NPC SYSTEMS',
+  'stretch-squash': 'ANIMATION',
+  'drone-fleet': 'AI SIM',
+  'event-horizon': 'UNITY DOTS',
+  warfront: 'MULTIPLAYER',
+  bitboard: 'BITWISE MATH',
+  'pixel-farm': 'SDL2 RENDERER',
+  'material-forge': 'MAYA TOOL',
+}
+const WORLD_NOTES: Record<string, string> = {
+  voxel: 'Destructible voxel gameplay systems.',
+  'npc-ecs': 'ECS schedules and NPC behavior.',
+  'stretch-squash': 'Procedural character animation.',
+  'drone-fleet': 'VR drone flight and AI simulation.',
+  'event-horizon': 'Solar systems with Unity DOTS.',
+  warfront: 'Replicated multiplayer combat.',
+  bitboard: 'Bitwise math in a C# training game.',
+  'pixel-farm': 'Tile farming rendered with SDL2.',
+  'material-forge': 'PBR texture linking for Maya.',
+}
+
+interface WorldRowUi {
+  row: HTMLDivElement
+  select: HTMLButtonElement
+  expanded: HTMLDivElement
+}
 
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const item = document.createElement(tag)
@@ -33,7 +61,7 @@ function getTheme(): ThemeMode {
     const stored = window.localStorage.getItem(THEME_KEY)
     if (stored === 'light' || stored === 'dark') return stored
   } catch { /* Storage can be disabled. */ }
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  return 'dark'
 }
 
 function homePath(): string {
@@ -64,10 +92,14 @@ export class AppShell {
   private readonly loading = node('div', 'loading-panel')
   private readonly fallback = node('div', 'no-webgl-fallback')
   private readonly themeButton = node('button', 'theme-button')
+  private readonly themeChoice = node('span', 'theme-choice')
+  private readonly worldMapButton = node('button', 'nav-button world-map-button is-active', 'World map')
   private readonly archiveButton = node('button', 'nav-button', 'Projects')
   private readonly experienceButton = node('button', 'nav-button', 'Experience')
   private readonly location = node('span', 'sector-readout', 'SECTOR 0 · 0 · 0')
   private readonly heading = node('span', 'heading-readout', 'NOSE 0 · 0 · -1')
+  private readonly worldRows = new Map<string, WorldRowUi>()
+  private selectedPlanet: PlanetDefinition = planetDefinitions[0]
   private readonly portfolio: PortfolioView
   private readonly input: InputActions
   private readonly media: MediaPopup
@@ -109,6 +141,7 @@ export class AppShell {
     this.archiveButton.addEventListener('click', () => this.openPortfolio('projects'))
     this.experienceButton.addEventListener('click', () => this.openPortfolio('experience'))
     this.themeButton.addEventListener('click', this.toggleTheme)
+    this.worldMapButton.addEventListener('click', this.showWorldMap)
     this.enterButton.addEventListener('click', () => void this.enterApproach())
     this.retryButton.addEventListener('click', () => void this.retryLoading())
     this.flyPastButton.addEventListener('click', this.flyPast)
@@ -125,8 +158,10 @@ export class AppShell {
       this.renderer.toneMapping = ACESFilmicToneMapping
       this.renderer.toneMappingExposure = 1.28
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      this.canvas.setAttribute('role', 'img')
+      this.canvas.setAttribute('aria-label', 'Interactive dark space with a spaceship and nine portfolio planets. Use flight controls or the flight manifest to explore.')
       this.stage.append(this.canvas)
-      this.space = new SpaceSession(planetDefinitions, this.theme)
+      this.space = new SpaceSession(planetDefinitions)
       this.onResize()
       this.frame = requestAnimationFrame(this.tick)
     } catch (error) {
@@ -145,6 +180,7 @@ export class AppShell {
     window.removeEventListener('resize', this.onResize)
     window.removeEventListener('popstate', this.onPopState)
     this.themeButton.removeEventListener('click', this.toggleTheme)
+    this.worldMapButton.removeEventListener('click', this.showWorldMap)
     this.flyPastButton.removeEventListener('click', this.flyPast)
     this.loader.dispose()
     this.planetSession?.dispose()
@@ -160,7 +196,9 @@ export class AppShell {
     const header = node('header', 'site-header')
     const brand = node('a', 'brand')
     brand.href = homePath()
-    brand.append(node('span', 'brand-mark', 'S/0'), node('span', 'brand-name', 'SYSTEM ZERO'))
+    const brandCopy = node('span', 'brand-copy')
+    brandCopy.append(node('span', 'brand-name', 'SYSTEM ZERO'), node('span', 'brand-descriptor', 'BINDO / GAME DEVELOPMENT PORTFOLIO'))
+    brand.append(node('span', 'brand-mark', 'S/0'), brandCopy)
     brand.addEventListener('click', event => {
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
       event.preventDefault()
@@ -168,6 +206,7 @@ export class AppShell {
     })
     const nav = node('nav', 'site-nav')
     nav.setAttribute('aria-label', 'Portfolio')
+    this.worldMapButton.type = 'button'
     this.archiveButton.type = 'button'
     this.archiveButton.dataset.testid = 'portfolio-button'
     this.experienceButton.type = 'button'
@@ -178,44 +217,61 @@ export class AppShell {
     contact.rel = 'noopener noreferrer'
     this.themeButton.type = 'button'
     this.themeButton.dataset.testid = 'theme-toggle'
-    nav.append(this.archiveButton, this.experienceButton, contact, this.themeButton)
+    this.themeButton.append(node('span', 'theme-prefix', 'INTERFACE'), this.themeChoice)
+    nav.append(this.worldMapButton, this.archiveButton, this.experienceButton, contact, this.themeButton)
     header.append(brand, nav)
     return header
   }
 
   private buildFlightUi(): void {
     const hero = node('section', 'flight-hero')
+    const title = node('h1', 'hero-title')
+    title.append('Game', node('br', ''), 'systems.', node('br', ''), node('em', 'hero-accent', 'In motion.'))
     hero.append(
-      node('span', 'eyebrow', 'AN INTERACTIVE GAME DEVELOPMENT PORTFOLIO'),
-      node('h1', '', 'Explore the work.'),
-      node('p', '', 'Pilot a small ship across nine worlds inspired by my game systems, tools, and simulations. Each landing connects to the original project.'),
+      node('span', 'eyebrow', '001 / EXPLORATION LOG'),
+      title,
+      node('p', 'hero-description', 'Fly between nine worlds shaped by my work in gameplay, AI, simulation, rendering, and tools.'),
     )
     const orbitLabel = node('div', 'orbit-label')
-    orbitLabel.append(node('span', 'status-dot'), node('span', '', 'OPEN SPACE · NINE WORLDS'))
+    orbitLabel.append(node('span', 'status-dot'), node('span', '', 'SHIP READY'), node('span', 'orbit-count', '9 PROJECT WORLDS'))
     hero.append(orbitLabel)
 
     const atlasTitle = node('div', 'atlas-title')
     this.atlasToggle.type = 'button'
     this.atlasToggle.setAttribute('aria-expanded', 'false')
-    this.atlasToggle.addEventListener('click', () => {
-      const compact = this.atlas.classList.toggle('compact')
-      this.atlasToggle.setAttribute('aria-expanded', String(!compact))
-      this.atlasToggle.textContent = compact ? 'Destinations ▾' : 'Close chart ▴'
-    })
+    this.atlasToggle.addEventListener('click', () => this.setAtlasCompact(!this.atlas.classList.contains('compact')))
     this.atlas.classList.add('compact')
-    atlasTitle.append(node('span', 'eyebrow', 'STAR CHART'), node('h2', '', 'Choose a destination'), this.atlasToggle)
-    this.atlas.append(atlasTitle, this.worldList)
+    this.atlas.setAttribute('aria-label', 'Flight manifest')
+    const atlasHeading = node('div', 'atlas-heading')
+    atlasHeading.append(node('span', 'eyebrow', 'DESTINATION INDEX'), node('h2', '', 'Flight manifest'))
+    atlasTitle.append(atlasHeading, node('span', 'atlas-count', '09 / 09'), this.atlasToggle)
+    this.worldList.setAttribute('aria-label', 'Nine project worlds')
+    const atlasFooter = node('div', 'atlas-footer')
+    atlasFooter.append(node('span', '', 'SELECT A WORLD TO FLY'), node('span', '', '09 PROJECT WORLDS'))
+    this.atlas.append(atlasTitle, this.worldList, atlasFooter)
     for (const [index, planet] of planetDefinitions.entries()) {
       const row = node('div', 'world-row')
+      row.dataset.world = planet.slug
+      const select = node('button', 'world-select')
+      select.type = 'button'
+      select.setAttribute('aria-label', 'Select ' + planet.title + ' in flight manifest')
+      select.addEventListener('click', () => this.selectPlanet(planet))
       const glyph = node('span', 'world-glyph')
       glyph.style.setProperty('--planet-color', '#' + planet.color.toString(16).padStart(6, '0'))
       glyph.textContent = String(index + 1).padStart(2, '0')
       const name = node('span', 'world-row-name', planet.title)
-      const fly = node('button', 'world-fly', 'Fly')
+      const kind = node('span', 'world-kind', WORLD_TAGS[planet.slug] ?? 'PROJECT WORLD')
+      select.append(glyph, name, kind)
+      const expanded = node('div', 'world-expanded')
+      expanded.id = 'world-' + planet.slug + '-details'
+      select.setAttribute('aria-controls', expanded.id)
+      const summary = node('p', 'world-summary', WORLD_NOTES[planet.slug] ?? 'Explore the project behind this world.')
+      const actions = node('div', 'world-actions')
+      const fly = node('button', 'world-fly', 'Warp to orbit ↗')
       fly.type = 'button'
       fly.setAttribute('aria-label', 'Warp to orbit around ' + planet.title)
       fly.addEventListener('click', () => this.warpTo(planet))
-      const link = node('a', 'world-direct', 'Open ↗')
+      const link = node('a', 'world-direct', 'Project ↗')
       link.href = pathForPlanet(planet)
       link.setAttribute('aria-label', 'Open ' + planet.title + ' landing')
       link.addEventListener('click', event => {
@@ -223,9 +279,13 @@ export class AppShell {
         event.preventDefault()
         void this.navigateToWorld(planet, true)
       })
-      row.append(glyph, name, fly, link)
+      actions.append(fly, link)
+      expanded.append(summary, actions)
+      row.append(select, expanded)
+      this.worldRows.set(planet.slug, { row, select, expanded })
       this.worldList.append(row)
     }
+    this.selectPlanet(this.selectedPlanet)
 
     const center = node('div', 'reticle')
     center.setAttribute('aria-hidden', 'true')
@@ -234,12 +294,42 @@ export class AppShell {
     const hud = node('div', 'flight-hud')
     this.location.dataset.testid = 'ship-position'
     this.heading.dataset.testid = 'ship-heading'
+    const status = node('div', 'flight-status')
+    status.append(node('span', 'status-dot'), node('span', '', 'FREE FLIGHT'))
     const telemetry = node('div', 'flight-telemetry')
     telemetry.append(this.location, this.heading)
-    const controls = node('p', 'flight-controls', 'W/S thrust · A/D strafe · R/F lift · Move mouse/Arrows steer · Q/E roll · Shift boost · Space brake · Click view for pointer lock')
-    hud.append(telemetry, controls)
+    const controls = node('div', 'flight-controls')
+    for (const [key, label] of [['W/S', 'THRUST'], ['MOUSE', 'STEER'], ['Q/E', 'ROLL'], ['SPACE', 'BRAKE']]) {
+      const item = node('span', 'flight-control')
+      item.append(node('strong', '', key), document.createTextNode(' ' + label))
+      controls.append(item)
+    }
+    hud.append(status, telemetry, controls)
     this.buildTouchControls()
     this.flightUi.append(hero, this.atlas, center, hud, this.touchControls)
+  }
+
+  private setAtlasCompact(compact: boolean): void {
+    this.atlas.classList.toggle('compact', compact)
+    this.atlasToggle.setAttribute('aria-expanded', String(!compact))
+    this.atlasToggle.textContent = compact ? 'Destinations ▾' : 'Close chart ▴'
+  }
+
+  private selectPlanet(planet: PlanetDefinition): void {
+    this.selectedPlanet = planet
+    for (const [slug, { row, select, expanded }] of this.worldRows) {
+      const selected = slug === planet.slug
+      row.classList.toggle('selected', selected)
+      select.setAttribute('aria-expanded', String(selected))
+      expanded.hidden = !selected
+    }
+  }
+
+  private readonly showWorldMap = (): void => {
+    if (this.planetSession || this.loadingRoute) this.exitToSpace(true)
+    if (this.portfolio.isOpen) this.portfolio.close()
+    this.setAtlasCompact(false)
+    this.worldRows.get(this.selectedPlanet.slug)?.select.focus()
   }
 
   private buildTouchControls(): void {
@@ -339,6 +429,7 @@ export class AppShell {
     if (!nearest || distance > nearest.radius + APPROACH_RADIUS) {
       this.approachPlanet = null
       this.approach.hidden = true
+      this.flightUi.classList.remove('has-approach')
       this.space.hold(this.portfolio.isOpen || this.media.isOpen)
       if (this.loader.state.status !== 'idle') this.loader.clear()
       if (distance > (nearest?.radius ?? 0) + APPROACH_RADIUS) this.dismissedApproach = null
@@ -347,6 +438,8 @@ export class AppShell {
 
     this.approachPlanet = nearest
     this.approachDistanceValue = distance
+    if (this.selectedPlanet.slug !== nearest.slug) this.selectPlanet(nearest)
+    this.flightUi.classList.add('has-approach')
     if (this.loader.state.planet?.slug !== nearest.slug) void this.loader.prefetch(nearest)
     this.space.hold(this.portfolio.isOpen || this.media.isOpen)
     this.renderApproach()
@@ -405,6 +498,8 @@ export class AppShell {
 
   private warpTo(planet: PlanetDefinition): void {
     if (this.planetSession || this.loadingRoute) this.exitToSpace(true)
+    this.selectPlanet(planet)
+    this.setAtlasCompact(true)
     this.dismissedApproach = null
     this.loader.clear()
     this.space?.placeOutside(planet)
@@ -427,8 +522,10 @@ export class AppShell {
     this.loadingRoute = planet
     this.approachPlanet = null
     this.approach.hidden = true
+    this.flightUi.classList.remove('has-approach')
     this.landing.hidden = true
     this.flightUi.hidden = true
+    this.worldMapButton.classList.remove('is-active')
     this.loading.hidden = false
     this.renderLoading('PREPARING LANDING', planet.title, 'Preparing world…')
     this.space.hold(true)
@@ -443,7 +540,6 @@ export class AppShell {
     }
     try {
       this.planetSession = ready.module.mount(ready.prepared)
-      this.planetSession.setTheme(this.theme)
       this.activePlanet = planet
       this.loadingRoute = null
       this.loading.hidden = true
@@ -523,6 +619,7 @@ export class AppShell {
     if (previous) this.space?.placeOutside(previous)
     this.space?.hold(false)
     this.flightUi.hidden = !this.renderer
+    this.worldMapButton.classList.add('is-active')
     this.landing.hidden = true
     this.loading.hidden = true
     this.restoreContext()
@@ -568,7 +665,7 @@ export class AppShell {
     this.fallback.hidden = false
     this.fallback.replaceChildren(
       node('span', 'eyebrow', 'PORTFOLIO · STATIC VIEW'),
-      node('h1', '', planet ? planet.title : 'Explore the work.'),
+      node('h1', '', planet ? planet.title : 'Game systems. In motion.'),
       node('p', '', 'The 3D view is unavailable here. Every project and career entry remains accessible below.'),
     )
     const grid = node('div', 'fallback-grid')
@@ -602,11 +699,9 @@ export class AppShell {
   private applyTheme(theme: ThemeMode, persist: boolean): void {
     this.theme = theme
     document.documentElement.dataset.theme = theme
-    this.themeButton.textContent = theme === 'dark' ? '☀ Light' : '☾ Dark'
-    this.themeButton.setAttribute('aria-label', 'Switch to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode')
+    this.themeChoice.textContent = theme === 'dark' ? ' / LIGHT' : ' / DARK'
+    this.themeButton.setAttribute('aria-label', 'Switch interface to ' + (theme === 'dark' ? 'light' : 'dark') + ' mode. The game stays dark.')
     this.themeButton.setAttribute('aria-pressed', String(theme === 'light'))
-    this.space?.setTheme(theme)
-    this.planetSession?.setTheme(theme)
     if (persist) {
       try { window.localStorage.setItem(THEME_KEY, theme) } catch { /* Current view still changes. */ }
     }

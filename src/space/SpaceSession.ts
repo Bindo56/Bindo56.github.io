@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { PlanetDefinition, ThemeMode } from '../app/PlanetContracts.ts'
+import type { PlanetDefinition } from '../app/PlanetContracts.ts'
 import { ShipController, type ShipActions } from './ShipController.ts'
 import {
   differenceSpacePosition,
@@ -61,7 +61,8 @@ export class SpaceSession {
   private elapsed = 0
   private held = false
 
-  constructor(definitions: readonly PlanetDefinition[], theme: ThemeMode) {
+  constructor(definitions: readonly PlanetDefinition[]) {
+    this.scene.background = new THREE.Color(0x020917)
     this.sun.position.set(-100, 150, -200)
     this.scene.add(this.ambient, this.sun)
 
@@ -83,7 +84,6 @@ export class SpaceSession {
 
     this.camera.position.set(0, 3.4, 11)
     this.camera.lookAt(0, 0, -4)
-    this.setTheme(theme)
     this.updateVisuals(0, 0, false)
   }
 
@@ -103,25 +103,6 @@ export class SpaceSession {
     }
 
     this.updateVisuals(frame, this.held ? 0 : actions.thrust, !this.held && actions.boost)
-  }
-
-  setTheme(mode: ThemeMode): void {
-    const light = mode === 'light'
-    this.scene.background = new THREE.Color(light ? 0xdce9fa : 0x020917)
-    this.ambient.color.setHex(light ? 0xffffff : 0x94bce8)
-    this.ambient.groundColor.setHex(light ? 0x6d829b : 0x14203d)
-    this.ambient.intensity = light ? 2.2 : 1.15
-    this.sun.color.setHex(light ? 0xffe3b0 : 0xffe9cb)
-    this.sun.intensity = light ? 2.1 : 2.4
-    this.shipHull.color.setHex(light ? 0x294463 : 0xd6e9f6)
-    this.canopy.color.setHex(light ? 0x1789b9 : 0x45d7ed)
-    ;(this.starDome.material as THREE.PointsMaterial).color.setHex(light ? 0x365b89 : 0xc8e3ff)
-    ;(this.nearbyStars.material as THREE.PointsMaterial).color.setHex(light ? 0x2e678e : 0xa2ceff)
-
-    for (const proxy of this.planets) {
-      const material = proxy.atmosphere.material as THREE.MeshBasicMaterial
-      material.opacity = light ? 0.095 : 0.16
-    }
   }
 
   getShipPosition(): SpacePosition {

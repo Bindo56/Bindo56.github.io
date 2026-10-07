@@ -21,15 +21,12 @@ import type {
   PlanetModule,
   PlanetSession,
   PreparedPlanet,
-  ThemeMode,
 } from '../app/PlanetContracts.ts'
 import type { PlanetSlug } from './registry.ts'
 
 interface PreparedPlaceholder extends PreparedPlanet {
   body: Group
   accents: Group
-  ambient: AmbientLight
-  sun: DirectionalLight
 }
 
 const up = new Vector3(0, 1, 0)
@@ -43,6 +40,7 @@ export function createPlaceholderPlanet(slug: PlanetSlug): PlanetModule {
       if (signal.aborted) throw new DOMException('Planet preparation cancelled', 'AbortError')
 
       const scene = new Scene()
+      scene.background = new Color(0x080e1c)
       const camera = new PerspectiveCamera(50, 1, 0.1, 80)
       camera.position.set(0, 2.6, 12.5)
       camera.lookAt(0, 0, 0)
@@ -68,8 +66,6 @@ export function createPlaceholderPlanet(slug: PlanetSlug): PlanetModule {
         camera,
         body,
         accents,
-        ambient,
-        sun,
         dispose() {
           if (disposed) return
           disposed = true
@@ -82,7 +78,6 @@ export function createPlaceholderPlanet(slug: PlanetSlug): PlanetModule {
           scene.clear()
         },
       }
-      setTheme(prepared, 'dark')
       return prepared
     },
     mount(prepared: PreparedPlanet): PlanetSession {
@@ -97,21 +92,12 @@ export function createPlaceholderPlanet(slug: PlanetSlug): PlanetModule {
           placeholder.accents.rotation.y -= dt * 0.07
           placeholder.accents.position.y = Math.sin(elapsed * 0.7) * 0.08
         },
-        setTheme(mode: ThemeMode) {
-          setTheme(placeholder, mode)
-        },
         dispose() {
           placeholder.dispose()
         },
       }
     },
   }
-}
-
-function setTheme(prepared: PreparedPlaceholder, mode: ThemeMode): void {
-  prepared.scene.background = new Color(mode === 'dark' ? 0x080e1c : 0xdbe8ed)
-  prepared.ambient.intensity = mode === 'dark' ? 1.2 : 2.1
-  prepared.sun.intensity = mode === 'dark' ? 2.2 : 1.8
 }
 
 function decorate(slug: PlanetSlug, color: number, body: Group, accents: Group): void {

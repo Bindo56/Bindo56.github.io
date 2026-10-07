@@ -33,15 +33,15 @@ Run the full test command before pushing. The existing Pages workflow runs the u
 | Open project archive | Projects button, M, or Tab |
 | Enter nearby planet | Enter button or Enter key |
 | Leave landing | Return to space or Escape |
-| Theme | Header toggle or T |
+| Interface theme | Header toggle or T; the 3D game remains dark |
 
-Touch screens show buttons for every flight action. The star chart also has a **Fly** shortcut to each orbit; visitors can still travel manually.
+Touch screens show buttons for every flight action. Select a destination in the flight manifest, then use **Warp to orbit** or fly there manually.
 
 ## Routes and code
 
 - The root path is the shared space shell.
 - Paths under /worlds/ for voxel, npc-ecs, stretch-squash, drone-fleet, event-horizon, warfront, bitboard, pixel-farm, and material-forge are refreshable static Pages entries. Vite emits one HTML entry per path. In-app navigation uses browser history and keeps one canvas alive.
-- src/app/AppShell.ts owns the renderer, frame loop, theme, route transition, portfolio UI, and no-WebGL fallback.
+- src/app/AppShell.ts owns the renderer, frame loop, interface theme, route transition, portfolio UI, and no-WebGL fallback. Space and landing scenes always use dark backgrounds.
 - src/app/InputActions.ts separates space, planet, and dialog input. src/app/PlanetLoader.ts keeps only one prepared landing and drops superseded loads.
 - src/space/SpacePosition.ts rebases 4,096-unit sectors. src/space/SpaceSession.ts owns the ship, chase camera, deterministic stars, and planet proxies.
 - src/worlds/registry.ts is the typed source of nine slugs, positions, appearances, project keys, and lazy imports. Every placeholder module uses the prepare → mount → update → dispose contract in src/app/PlanetContracts.ts.

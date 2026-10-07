@@ -1,51 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 :root {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Barlow, Arial, sans-serif;
   color-scheme: dark;
-  --bg: #030913;
-  --ink: #f5f7fb;
-  --muted: #a6b8cf;
-  --line: rgba(164, 201, 238, 0.24);
-  --surface: rgba(5, 17, 33, 0.78);
-  --surface-solid: #08182b;
-  --surface-soft: rgba(7, 19, 37, 0.56);
-  --accent: #76e4ee;
-  --accent-ink: #06202a;
-  --chip: rgba(105, 204, 225, 0.12);
-  --shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
-  background: var(--bg);
+  --space-bg: #010815;
+  --ink: #f2eee4;
+  --muted: #a7b4c4;
+  --line: #44505d;
+  --surface: #0b141e;
+  --surface-solid: #101c29;
+  --surface-soft: #1b2731;
+  --accent: #f4b260;
+  --accent-ink: #191916;
+  --scrim: rgba(1, 6, 13, .86);
+  --shadow: 0 20px 50px rgba(0, 0, 0, .26);
+  --gutter: clamp(20px, 3vw, 42px);
+  background: var(--space-bg);
   color: var(--ink);
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #dce9f8;
-  --ink: #102239;
-  --muted: #455f7e;
-  --line: rgba(37, 79, 122, 0.29);
-  --surface: rgba(246, 251, 255, 0.85);
-  --surface-solid: #f8fbff;
-  --surface-soft: rgba(243, 249, 255, 0.67);
-  --accent: #0b6984;
-  --accent-ink: #fff;
-  --chip: rgba(7, 100, 143, 0.09);
-  --shadow: 0 22px 70px rgba(37, 73, 113, 0.16);
-  background: var(--bg);
+  --ink: #17202a;
+  --muted: #53616c;
+  --line: #a9aaa2;
+  --surface: #eee8dc;
+  --surface-solid: #f4eee1;
+  --surface-soft: #ded8c9;
+  --accent: #97491c;
+  --accent-ink: #fff9ee;
+  --scrim: rgba(3, 8, 15, .78);
+  --shadow: 0 20px 50px rgba(0, 0, 0, .18);
+  background: var(--space-bg);
   color: var(--ink);
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
+html, body { width: 100%; min-height: 100%; margin: 0; }
 body { overflow: hidden; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { font: inherit; cursor: pointer; }
 a { color: inherit; }
 [hidden] { display: none !important; }
-
 :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
 #app, .space-stage, .shell-ui { position: fixed; inset: 0; }
-#app { isolation: isolate; overflow: hidden; background: var(--bg); }
-.space-stage { z-index: 0; }
+#app { isolation: isolate; overflow: hidden; background: var(--space-bg); }
+.space-stage { z-index: 0; background: var(--space-bg); }
 .space-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .shell-ui { z-index: 1; pointer-events: none; }
 .shell-ui button, .shell-ui a, .shell-ui .archive-overlay, .shell-ui .landing-panel,
@@ -54,415 +55,627 @@ a { color: inherit; }
 
 .eyebrow {
   display: block;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .2em;
-  line-height: 1.5;
-  text-transform: uppercase;
   color: var(--accent);
+  font: 600 10px/1.5 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
 }
 
 .site-header {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  inset: 0 0 auto;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  min-height: 76px;
-  padding: 12px clamp(20px, 4vw, 68px);
+  gap: 24px;
+  height: 80px;
+  padding: 0 var(--gutter);
   border-bottom: 1px solid var(--line);
-  background: linear-gradient(180deg, var(--surface), var(--surface-soft));
-  backdrop-filter: blur(18px);
+  background: var(--surface);
   pointer-events: auto;
-  z-index: 10;
 }
-.brand { display: inline-flex; align-items: center; gap: 13px; text-decoration: none; white-space: nowrap; }
+.site-header::after {
+  position: absolute;
+  bottom: -2px;
+  left: var(--gutter);
+  width: 94px;
+  height: 3px;
+  background: var(--accent);
+  content: '';
+}
+.brand { display: inline-flex; flex: none; align-items: center; gap: 13px; min-width: 320px; text-decoration: none; }
 .brand-mark {
   display: grid;
+  flex: none;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border: 1px solid var(--accent);
-  border-radius: 12px;
   color: var(--accent);
-  font-size: 13px;
-  font-weight: 900;
+  font: 600 14px 'IBM Plex Mono', Consolas, monospace;
   letter-spacing: -.08em;
-  box-shadow: inset 0 0 18px var(--chip);
+  transform: skew(-7deg);
 }
-.brand-name { font-size: 13px; font-weight: 900; letter-spacing: .21em; }
-.site-nav { display: flex; align-items: center; gap: clamp(8px, 2.4vw, 30px); }
-.nav-button, .nav-contact, .theme-button {
-  padding: 9px 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: .05em;
+.brand-copy { display: flex; flex-direction: column; gap: 4px; }
+.brand-name {
+  font: 800 24px/.9 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: .17em;
   white-space: nowrap;
 }
-.nav-button:hover, .nav-contact:hover { color: var(--accent); }
-.theme-button {
-  padding: 9px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--chip);
+.brand-descriptor {
+  color: var(--muted);
+  font: 500 10px/1.25 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .1em;
+  white-space: nowrap;
 }
-.theme-button:hover { border-color: var(--accent); }
+.site-nav { display: flex; align-items: stretch; gap: clamp(12px, 2.1vw, 31px); height: 100%; margin-left: auto; }
+.nav-button, .nav-contact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 3px 0 0;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font: 600 13px Barlow, Arial, sans-serif;
+  letter-spacing: .075em;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color .16s ease;
+}
+.nav-button:hover, .nav-contact:hover, .world-map-button.is-active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+.theme-button {
+  align-self: center;
+  flex: none;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 500 11px 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: border-color .16s ease, background .16s ease;
+}
+.theme-button:hover { border-color: var(--accent); background: var(--surface-soft); }
+.theme-choice { margin-left: 7px; color: var(--accent); font-weight: 600; }
 
 .flight-hero {
   position: absolute;
-  top: clamp(110px, 15vh, 170px);
-  left: clamp(20px, 4vw, 68px);
-  width: min(340px, 31vw);
-  padding: 0 2px;
-  text-shadow: 0 2px 28px rgba(0, 0, 0, .2);
+  top: clamp(111px, 15vh, 136px);
+  left: var(--gutter);
+  width: min(366px, 32vw);
+  padding: 27px 29px 24px;
+  border: 1px solid var(--line);
+  background: var(--surface);
 }
-.flight-hero h1 {
-  margin: 12px 0;
-  font-size: clamp(36px, 4.4vw, 62px);
-  font-weight: 850;
-  line-height: .98;
-  letter-spacing: -.055em;
+.flight-hero::before, .atlas-panel::before, .landing-panel::before,
+.loading-panel::before, .approach-card::before {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 36px;
+  height: 3px;
+  background: var(--accent);
+  content: '';
 }
-.flight-hero p { max-width: 30ch; font-size: 14px; line-height: 1.6; color: var(--muted); }
-.orbit-label { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 10px; font-weight: 800; letter-spacing: .13em; }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+.flight-hero h1, .hero-title {
+  margin: 22px 0 14px;
+  font: 700 clamp(46px, 4.8vw, 69px)/.84 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: -.017em;
+  text-transform: uppercase;
+}
+.hero-accent { color: var(--accent); font-style: normal; }
+.flight-hero p, .hero-description {
+  max-width: 31ch;
+  margin: 21px 0 0;
+  color: var(--muted);
+  font: 400 16px/1.48 Barlow, Arial, sans-serif;
+}
+.orbit-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font: 600 11px/1.4 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.status-dot { display: inline-block; flex: none; width: 7px; height: 7px; background: var(--accent); transform: rotate(45deg); }
+.orbit-count { margin-left: auto; color: var(--muted); }
 
 .atlas-panel {
   position: absolute;
-  top: clamp(105px, 13vh, 140px);
-  right: clamp(20px, 4vw, 68px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  width: min(325px, 29vw);
-  max-height: min(660px, calc(100vh - 205px));
-  padding: 18px;
+  top: clamp(108px, 13.8vh, 124px);
+  right: var(--gutter);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  width: min(354px, 32vw);
+  max-height: min(647px, calc(100vh - 211px));
+  min-height: 0;
+  padding: 23px 23px 0;
   border: 1px solid var(--line);
-  border-radius: 20px;
   background: var(--surface);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(20px);
 }
-.atlas-title { padding: 0 2px 13px; border-bottom: 1px solid var(--line); }
-.atlas-title h2 { margin: 5px 0 0; font-size: 18px; line-height: 1.2; letter-spacing: -.02em; }
+.atlas-title { position: relative; flex: none; display: flex; align-items: end; justify-content: space-between; gap: 12px; padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.atlas-title h2 {
+  margin: 8px 0 0;
+  font: 700 26px/1 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+.atlas-count, .atlas-footer { color: var(--muted); font: 500 10px/1.5 'IBM Plex Mono', Consolas, monospace; }
+.atlas-count { align-self: end; white-space: nowrap; }
 .atlas-toggle { display: none; }
-.world-list { overflow: auto; scrollbar-width: thin; }
-.world-row {
-  display: grid;
-  grid-template-columns: 35px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 7px;
-  min-height: 51px;
-  border-bottom: 1px solid var(--line);
-}
+.world-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-color: var(--line) transparent; scrollbar-width: thin; }
+.world-row { position: relative; border-bottom: 1px solid var(--line); }
 .world-row:last-child { border-bottom: 0; }
-.world-glyph {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--planet-color);
-  border-radius: 50%;
-  color: var(--planet-color);
-  font-size: 9px;
-  font-weight: 900;
+.world-row.selected {
+  margin: 8px 0 2px;
+  padding: 2px 7px 0;
+  border-bottom: 0;
+  border-left: 3px solid var(--accent);
+  background: var(--surface-soft);
 }
-.world-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 750; }
-.world-fly, .world-direct {
-  padding: 6px 5px;
+.world-select {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 2px;
   border: 0;
   background: transparent;
-  color: var(--muted);
-  font-size: 10px;
-  font-weight: 800;
-  text-decoration: none;
+  color: var(--ink);
+  text-align: left;
 }
-.world-fly:hover, .world-direct:hover { color: var(--accent); }
-.world-fly { color: var(--accent); }
+.world-select:hover, .world-select:focus-visible { color: var(--accent); }
+.world-glyph {
+  display: inline-block;
+  color: var(--accent);
+  font: 600 11px 'IBM Plex Mono', Consolas, monospace;
+  white-space: nowrap;
+}
+.world-row-name {
+  min-width: 0;
+  overflow: hidden;
+  font: 600 16px/1.1 Barlow, Arial, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-kind {
+  color: var(--muted);
+  font: 500 10px/1.2 'IBM Plex Mono', Consolas, monospace;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.world-row.selected .world-select { min-height: 44px; }
+.world-row.selected .world-row-name { font: 700 21px/1 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.world-expanded { padding: 0 2px 9px 38px; }
+.world-summary { margin: 2px 0 7px; color: var(--muted); font: 500 12px/1.35 Barlow, Arial, sans-serif; }
+.world-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.world-fly, .world-direct {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--accent);
+  font: 700 11px/1.2 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .02em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.world-fly { flex: 1 1 120px; background: var(--accent); color: var(--accent-ink); }
+.world-direct { flex: 0 1 auto; background: transparent; color: var(--accent); }
+.world-fly:hover { filter: brightness(1.1); }
+.world-direct:hover { background: var(--accent); color: var(--accent-ink); }
+.atlas-footer { display: flex; justify-content: space-between; gap: 12px; flex: none; margin-top: auto; padding: 11px 0 14px; border-top: 1px solid var(--line); }
 
-.reticle { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px; transform: translate(-50%, -50%); opacity: .68; }
-.reticle-line, .reticle-dot { position: absolute; background: var(--ink); }
-.reticle-line.horizontal { top: 16px; left: 0; width: 34px; height: 1px; }
-.reticle-line.vertical { top: 0; left: 16px; width: 1px; height: 34px; }
-.reticle-dot { top: 13px; left: 13px; width: 7px; height: 7px; border: 1px solid var(--bg); border-radius: 50%; }
+.reticle { position: absolute; top: 47%; left: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); opacity: .58; }
+.reticle-line, .reticle-dot { position: absolute; background: #e6e9e8; }
+.reticle-line.horizontal { top: 8px; left: 0; width: 18px; height: 1px; }
+.reticle-line.vertical { top: 0; left: 8px; width: 1px; height: 18px; }
+.reticle-dot { top: 7px; left: 7px; width: 3px; height: 3px; }
 
 .flight-hud {
   position: absolute;
-  right: clamp(20px, 4vw, 68px);
-  bottom: 26px;
-  left: clamp(20px, 4vw, 68px);
+  right: var(--gutter);
+  bottom: 31px;
+  left: var(--gutter);
   display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 18px;
-  color: var(--muted);
-  text-shadow: 0 2px 12px var(--bg);
-}
-.flight-telemetry { display: grid; gap: 4px; }
-.sector-readout, .heading-readout { font-size: 10px; font-weight: 900; letter-spacing: .12em; white-space: nowrap; }
-.heading-readout { color: var(--accent); }
-.flight-controls { max-width: 700px; margin: 0; text-align: right; font-size: 10px; line-height: 1.5; letter-spacing: .025em; }
-
-.approach-card {
-  position: absolute;
-  right: clamp(20px, 4vw, 68px);
-  bottom: 72px;
-  width: min(325px, 31vw);
-  padding: 21px;
-  border: 1px solid var(--accent);
-  border-radius: 20px;
+  align-items: center;
+  gap: 20px;
+  min-height: 63px;
+  padding: 10px 18px;
+  border: 1px solid var(--line);
   background: var(--surface);
-  box-shadow: 0 0 50px var(--chip), var(--shadow);
-  backdrop-filter: blur(18px);
 }
-.approach-card h2 { margin: 7px 0 4px; font-size: 25px; letter-spacing: -.03em; }
-.approach-distance { display: block; color: var(--muted); font-size: 12px; }
-.approach-status { min-height: 2.8em; margin: 15px 0; font-size: 13px; line-height: 1.4; }
-.approach-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.flight-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 9px;
+  min-height: 37px;
+  padding-right: 19px;
+  border-right: 1px solid var(--line);
+  color: var(--accent);
+  font: 600 11px 'IBM Plex Mono', Consolas, monospace;
+  white-space: nowrap;
+}
+.flight-status .status-dot { width: 6px; height: 6px; }
+.flight-telemetry { display: grid; flex: none; gap: 4px; min-width: 210px; }
+.sector-readout, .heading-readout {
+  font: 500 11px/1.2 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+.heading-readout { color: var(--muted); }
+.flight-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 18px;
+  margin: 0 0 0 auto;
+  color: var(--muted);
+  font: 500 11px/1.45 'IBM Plex Mono', Consolas, monospace;
+  text-align: right;
+}
+.flight-controls strong { color: var(--ink); font-weight: 600; }
+.flight-control { white-space: nowrap; }
+
+.approach-card, .landing-panel, .loading-panel {
+  position: absolute;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.approach-card { left: var(--gutter); bottom: 112px; width: min(366px, 32vw); padding: 23px; }
+.approach-card h2 { margin: 8px 0 5px; font: 700 30px/.98 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.approach-distance { display: block; color: var(--muted); font: 500 11px 'IBM Plex Mono', Consolas, monospace; }
+.approach-status { min-height: 2.5em; margin: 17px 0; color: var(--ink); font-size: 14px; line-height: 1.45; }
+.approach-actions, .landing-links, .loading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .primary-button, .secondary-button, .text-button, .action-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 9px 15px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 850;
+  border: 1px solid transparent;
+  color: var(--ink);
+  font: 700 11px/1.2 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .025em;
+  text-align: center;
   text-decoration: none;
+  text-transform: uppercase;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
 }
-.primary-button { border: 1px solid var(--accent); color: var(--accent-ink); background: var(--accent); }
+.primary-button { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .primary-button:hover { filter: brightness(1.1); }
-.primary-button:disabled { cursor: wait; opacity: .52; }
-.secondary-button, .action-link { border: 1px solid var(--line); color: var(--ink); background: var(--chip); }
-.secondary-button:hover, .action-link:hover { border-color: var(--accent); }
-.text-button { border: 0; color: var(--muted); background: transparent; }
+.primary-button:disabled { cursor: wait; opacity: .56; filter: none; }
+.secondary-button, .action-link { border-color: var(--line); background: transparent; }
+.secondary-button:hover, .action-link:hover { border-color: var(--accent); color: var(--accent); }
+.text-button { color: var(--muted); background: transparent; }
 .text-button:hover { color: var(--accent); }
-.approach-source { display: inline-block; margin-top: 12px; color: var(--accent); font-size: 11px; font-weight: 750; }
+.approach-source { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; color: var(--accent); font: 600 11px 'IBM Plex Mono', Consolas, monospace; text-decoration: underline; text-underline-offset: 3px; }
 
 .landing-panel {
-  position: absolute;
-  bottom: clamp(24px, 8vh, 80px);
-  left: clamp(20px, 5vw, 88px);
-  width: min(530px, calc(100vw - 40px));
-  max-height: calc(100vh - 120px);
-  overflow: auto;
-  padding: clamp(22px, 3vw, 36px);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--accent);
-  border-radius: 20px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(20px);
+  bottom: clamp(115px, 13vh, 130px);
+  left: var(--gutter);
+  width: min(530px, calc(100vw - 2 * var(--gutter)));
+  max-height: calc(100vh - 218px);
+  overflow-y: auto;
+  padding: clamp(24px, 3vw, 34px);
 }
-.landing-panel h1 { margin: 10px 0 12px; font-size: clamp(36px, 4vw, 58px); line-height: 1; letter-spacing: -.05em; }
-.development-label {
-  display: inline-block;
-  padding: 7px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  color: var(--accent);
-  background: var(--chip);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: .03em;
+.landing-panel h1, .loading-panel h1 {
+  margin: 13px 0 17px;
+  font: 700 clamp(42px, 4.5vw, 62px)/.95 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  text-transform: uppercase;
 }
-.landing-panel h2 { margin: 25px 0 9px; font-size: 17px; }
-.landing-summary { margin: 0; max-width: 54ch; color: var(--ink); font-size: 14px; line-height: 1.6; }
-.landing-tech { margin: 13px 0 20px; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.landing-links { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
-.exit-button { display: flex; margin-top: 25px; }
+.development-label { display: inline-block; padding: 9px 10px; border: 1px solid var(--accent); color: var(--accent); font: 600 10px/1.25 'IBM Plex Mono', Consolas, monospace; letter-spacing: .02em; text-transform: uppercase; }
+.landing-panel h2 { margin: 25px 0 10px; padding-top: 17px; border-top: 1px solid var(--line); font: 700 24px 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.landing-summary { max-width: 58ch; margin: 0; color: var(--ink); font-size: 15px; line-height: 1.55; }
+.landing-tech { margin: 15px 0 20px; color: var(--muted); font: 500 11px/1.5 'IBM Plex Mono', Consolas, monospace; }
+.exit-button { display: flex; margin-top: 26px; }
 
-.loading-panel {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(450px, calc(100vw - 40px));
-  padding: 32px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(20px);
-  transform: translate(-50%, -50%);
-}
-.loading-panel h1 { margin: 8px 0; font-size: 32px; letter-spacing: -.04em; }
-.loading-panel p { color: var(--muted); font-size: 14px; line-height: 1.5; }
-.loading-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.loading-panel { top: 50%; left: 50%; width: min(450px, calc(100vw - 32px)); padding: 30px; transform: translate(-50%, -50%); }
+.loading-panel h1 { font-size: 42px; }
+.loading-panel p { color: var(--muted); font-size: 15px; line-height: 1.55; }
+.loading-actions { margin-top: 24px; }
 
 .archive-overlay, .media-popup {
   position: absolute;
   inset: 0;
+  z-index: 20;
   display: grid;
   place-items: center;
-  padding: 92px 20px 22px;
-  background: rgba(1, 8, 19, .72);
-  backdrop-filter: blur(10px);
+  padding: 100px 20px 22px;
+  background: var(--scrim);
   opacity: 0;
   visibility: hidden;
-  transition: opacity .18s, visibility .18s;
-  z-index: 20;
   pointer-events: none;
+  transition: opacity .18s ease, visibility .18s ease;
 }
-:root[data-theme='light'] .archive-overlay, :root[data-theme='light'] .media-popup { background: rgba(25, 54, 88, .55); }
 .archive-overlay.open, .media-popup.open { opacity: 1; visibility: visible; pointer-events: auto; }
 .archive-panel, .media-popup-window {
   width: min(1040px, 100%);
   max-height: 100%;
-  overflow: auto;
+  overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: 20px;
   background: var(--surface-solid);
   box-shadow: var(--shadow);
 }
 .archive-panel { display: flex; flex-direction: column; }
-.archive-header { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding: 25px 28px 15px; }
-.archive-heading h2 { margin: 5px 0 0; font-size: 30px; letter-spacing: -.04em; }
+.archive-header { display: flex; align-items: start; justify-content: space-between; gap: 18px; padding: 28px 30px 16px; border-top: 3px solid var(--accent); }
+.archive-heading h2 { margin: 7px 0 0; font: 700 40px/.95 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
 .icon-button, .media-popup-close {
   display: grid;
-  place-items: center;
-  width: 35px;
-  height: 35px;
   flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--line);
-  border-radius: 50%;
+  background: transparent;
   color: var(--ink);
-  background: var(--chip);
-  font-size: 23px;
+  font: 500 26px/1 Barlow, Arial, sans-serif;
 }
-.archive-tabs { display: flex; gap: 6px; margin: 0 28px; border-bottom: 1px solid var(--line); }
-.archive-tab { padding: 10px 13px; border: 0; border-bottom: 2px solid transparent; color: var(--muted); background: transparent; font-weight: 800; font-size: 12px; }
-.archive-tab[aria-selected='true'] { color: var(--accent); border-color: var(--accent); }
-.archive-content { overflow: auto; padding: 22px 28px 28px; }
+.icon-button:hover, .media-popup-close:hover { border-color: var(--accent); color: var(--accent); }
+.archive-tabs { display: flex; gap: 8px; margin: 0 30px; border-bottom: 1px solid var(--line); }
+.archive-tab {
+  min-height: 44px;
+  padding: 8px 14px 6px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px Barlow, Arial, sans-serif;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.archive-tab[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--accent); }
+.archive-content { min-height: 0; overflow-y: auto; padding: 24px 30px 30px; }
 .archive-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.archive-card { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--chip); border-top: 2px solid var(--card-accent, var(--accent)); }
-.archive-card h3 { margin: 5px 0 9px; font-size: 17px; line-height: 1.25; }
-.archive-summary { min-height: 3em; margin: 0; color: var(--ink); font-size: 12px; line-height: 1.5; }
-.archive-tech, .archive-company { margin: 11px 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.archive-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 15px; }
-.archive-link { display: inline-flex; align-items: center; min-height: 30px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: transparent; font-size: 10px; font-weight: 800; text-decoration: none; }
+.archive-card { min-width: 0; padding: 19px; border: 1px solid var(--line); border-top: 3px solid var(--card-accent, var(--accent)); background: var(--surface); }
+.archive-card h3 { margin: 7px 0 10px; font: 700 25px/1 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.archive-summary { min-height: 3em; margin: 0; color: var(--ink); font-size: 14px; line-height: 1.5; }
+.archive-tech, .archive-company { margin: 12px 0; color: var(--muted); font: 500 11px/1.5 'IBM Plex Mono', Consolas, monospace; }
+.archive-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.archive-link, .media-popup-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: 600 11px/1.2 'IBM Plex Mono', Consolas, monospace;
+  text-decoration: none;
+}
 .archive-link.primary { border-color: var(--accent); color: var(--accent); }
-.archive-link:hover { border-color: var(--accent); }
-.archive-pending { color: var(--muted); font-size: 11px; font-style: italic; }
-.archive-highlights { margin: 12px 0; padding-left: 18px; color: var(--ink); font-size: 12px; line-height: 1.6; }
+.archive-link:hover, .media-popup-link:hover { border-color: var(--accent); color: var(--accent); }
+.archive-pending { color: var(--muted); font: 500 11px/1.5 'IBM Plex Mono', Consolas, monospace; }
+.archive-highlights { margin: 12px 0; padding-left: 19px; color: var(--ink); font-size: 14px; line-height: 1.55; }
+.archive-highlights li + li { margin-top: 5px; }
 
 .media-popup { z-index: 30; }
-.media-popup-window { position: relative; width: min(840px, 100%); }
+.media-popup-window { position: relative; width: min(840px, 100%); border-top: 3px solid var(--accent); }
 .media-popup-close { position: absolute; top: 12px; right: 12px; z-index: 2; }
 .media-popup-media { aspect-ratio: 16 / 9; background: #000; }
 .media-popup-media iframe { width: 100%; height: 100%; border: 0; }
 .media-popup-placeholder { display: grid; place-items: center; height: 100%; color: var(--muted); }
-.media-popup-body { padding: 24px; }
-.media-popup-body h2 { margin: 0 40px 5px 0; font-size: 24px; }
-.media-popup-subtitle { margin: 0; color: var(--accent); font-size: 12px; }
-.media-popup-text { margin-top: 18px; font-size: 14px; line-height: 1.6; }
+.media-popup-body { padding: 26px 30px 30px; }
+.media-popup-body h2 { margin: 0 45px 7px 0; font: 700 36px/1 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.media-popup-subtitle { margin: 0; color: var(--accent); font: 600 11px 'IBM Plex Mono', Consolas, monospace; }
+.media-popup-text { margin-top: 20px; font-size: 15px; line-height: 1.6; }
 .media-popup-text p { margin: 0 0 9px; }
-.media-popup-links { display: flex; gap: 8px; margin-top: 18px; }
-.media-popup-link { display: inline-block; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 8px; text-decoration: none; font-size: 12px; }
-.media-popup-hint { display: block; margin-top: 16px; color: var(--muted); font-size: 11px; }
+.media-popup-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.media-popup-hint { display: block; margin-top: 18px; color: var(--muted); font: 500 11px 'IBM Plex Mono', Consolas, monospace; }
 
 .no-webgl-fallback {
   position: absolute;
-  inset: 76px 0 0;
-  overflow: auto;
-  padding: 35px clamp(20px, 6vw, 90px) 70px;
-  background: var(--bg);
+  inset: 80px 0 0;
+  overflow-y: auto;
+  padding: 40px clamp(20px, 6vw, 90px) 75px;
+  background: var(--surface);
 }
-.no-webgl-fallback > h1 { margin: 8px 0; font-size: clamp(34px, 5vw, 60px); letter-spacing: -.04em; }
-.no-webgl-fallback > p { max-width: 65ch; color: var(--muted); line-height: 1.5; }
-.fallback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 24px 0; }
-.fallback-card { padding: 19px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
-.fallback-card h2 { margin: 0 0 8px; font-size: 17px; }
-.fallback-card p { font-size: 12px; line-height: 1.5; }
+.no-webgl-fallback > h1 { margin: 9px 0; font: 700 clamp(42px, 5vw, 70px)/.95 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.no-webgl-fallback > p { max-width: 65ch; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.fallback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; margin: 28px 0; }
+.fallback-card { padding: 19px; border: 1px solid var(--line); border-top: 3px solid var(--accent); background: var(--surface-solid); }
+.fallback-card h2, .fallback-experience h2 { margin: 0 0 8px; font: 700 26px 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.fallback-card p { font-size: 14px; line-height: 1.5; }
 .fallback-tech { color: var(--muted); }
+.fallback-card .action-link { margin: 4px 8px 4px 0; }
 .fallback-experience { margin: 36px 0; }
-.fallback-experience p { color: var(--muted); font-size: 13px; }
+.fallback-experience p { color: var(--muted); font-size: 14px; }
 
 .touch-controls { display: none; }
 
+@media (max-width: 1120px) {
+  .brand { min-width: 250px; }
+  .brand-descriptor { font-size: 9px; }
+  .site-nav { gap: 15px; }
+  .nav-button, .nav-contact { font-size: 12px; }
+  .flight-controls { max-width: 410px; }
+}
+
 @media (max-width: 900px) {
-  .flight-hero { width: 260px; }
-  .flight-hero h1 { font-size: 40px; }
-  .atlas-panel { width: 270px; }
-  .flight-controls { max-width: 340px; }
+  :root { --gutter: 20px; }
+  .site-header { gap: 12px; }
+  .brand { min-width: auto; }
+  .brand-descriptor { display: none; }
+  .site-nav { gap: 12px; }
+  .theme-button { padding: 8px; font-size: 10px; }
+  .flight-hero { top: 112px; width: min(290px, 38vw); padding: 21px; }
+  .flight-hero h1 { font-size: clamp(39px, 5.8vw, 53px); }
+  .flight-hero p { font-size: 14px; }
+  .atlas-panel { top: 108px; width: min(310px, 41vw); max-height: calc(100vh - 200px); padding: 18px 17px 0; }
+  .atlas-title h2 { font-size: 23px; }
+  .world-kind { font-size: 9px; }
+  .flight-controls { max-width: 300px; font-size: 10px; }
+  .approach-card { width: min(290px, 38vw); }
 }
 
 @media (max-width: 680px) {
-  .site-header { min-height: 67px; padding: 10px 15px; gap: 8px; }
-  .brand-mark { width: 33px; height: 33px; font-size: 11px; }
-  .brand-name { font-size: 10px; letter-spacing: .1em; }
-  .site-nav { gap: 7px; }
-  .nav-button, .nav-contact, .theme-button { font-size: 10px; }
-  .site-nav .nav-button:nth-child(2) { display: none; }
-  .theme-button { padding: 8px; }
-  .flight-hero { top: 83px; left: 16px; width: calc(100% - 32px); }
-  .flight-hero h1 { margin: 7px 0; font-size: 32px; }
-  .flight-hero p { max-width: 46ch; margin: 0; font-size: 11px; }
-  .orbit-label { margin-top: 8px; font-size: 9px; }
-  .atlas-panel { top: 220px; right: 12px; width: min(250px, 66vw); max-height: min(41vh, 310px); padding: 12px; }
-  .atlas-title h2 { font-size: 14px; }
-  .atlas-toggle { display: block; margin-top: 7px; padding: 5px 0; border: 0; background: transparent; color: var(--accent); font-size: 11px; font-weight: 850; }
-  .atlas-panel.compact { width: auto; max-height: none; }
-  .atlas-panel.compact .atlas-title { padding-bottom: 0; border: 0; }
-  .atlas-panel.compact .atlas-title h2, .atlas-panel.compact .world-list { display: none; }
-  .world-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px; min-height: 38px; }
-  .world-glyph { width: 22px; height: 22px; font-size: 8px; }
-  .world-row-name { font-size: 10px; }
-  .world-direct { display: none; }
-  .world-fly { font-size: 10px; }
-  .flight-hud { bottom: 10px; left: 14px; right: 14px; }
+  :root { --gutter: 12px; }
+  .site-header { display: block; height: 107px; padding: 0 12px; }
+  .site-header::after { left: 12px; width: 62px; }
+  .brand { position: absolute; top: 9px; left: 12px; gap: 9px; height: 38px; }
+  .brand-mark { width: 34px; height: 34px; font-size: 12px; }
+  .brand-name { font-size: 21px; letter-spacing: .11em; }
+  .site-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: 56px 48px; gap: 0; width: 100%; height: 104px; margin: 0; }
+  .site-nav > .theme-button { grid-column: 4; grid-row: 1; justify-self: end; min-height: 40px; max-width: 100%; margin: 8px 0; padding: 7px 6px; font-size: 9px; overflow: hidden; }
+  .theme-prefix { display: none; }
+  .theme-choice { margin-left: 0; }
+  .site-nav > :nth-child(1) { grid-column: 1; grid-row: 2; }
+  .site-nav > :nth-child(2) { grid-column: 2; grid-row: 2; }
+  .site-nav > :nth-child(3) { grid-column: 3; grid-row: 2; }
+  .site-nav > :nth-child(4) { grid-column: 4; grid-row: 2; }
+  .nav-button, .nav-contact { min-width: 0; min-height: 44px; padding: 0 3px; font-size: 10px; letter-spacing: .03em; }
+  .flight-hero { top: 121px; left: 12px; width: calc(100% - 24px); padding: 14px 16px 15px; }
+  .flight-hero h1 { margin: 12px 0 8px; font-size: 39px; line-height: .86; }
+  .flight-hero p { max-width: 43ch; margin: 12px 0 0; font-size: 13px; line-height: 1.35; }
+  .orbit-label { margin-top: 12px; padding-top: 10px; font-size: 10px; }
+  .atlas-panel { top: auto; right: 12px; bottom: 144px; width: calc(100% - 24px); max-height: min(48vh, 440px); padding: 15px 16px 0; }
+  .atlas-panel.compact { right: 12px; bottom: 145px; width: auto; max-width: calc(100% - 24px); max-height: none; padding: 0; }
+  .atlas-panel.compact::before { display: none; }
+  .atlas-title { align-items: center; }
+  .atlas-title h2 { font-size: 21px; }
+  .atlas-toggle { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border: 0; background: transparent; color: var(--accent); font: 600 11px 'IBM Plex Mono', Consolas, monospace; text-transform: uppercase; }
+  .atlas-panel.compact .atlas-title { padding: 0; border: 0; }
+  .atlas-panel.compact .atlas-title > :not(.atlas-toggle), .atlas-panel.compact .world-list, .atlas-panel.compact .atlas-footer { display: none; }
+  .atlas-panel.compact .atlas-toggle { padding: 8px 14px; }
+  .flight-ui.has-approach .atlas-panel.compact { top: 119px; right: 12px; bottom: auto; }
+  .world-row-name { font-size: 15px; }
+  .world-row.selected .world-row-name { font-size: 21px; }
+  .flight-hud { right: 12px; bottom: 11px; left: 12px; gap: 10px; min-height: 66px; padding: 10px 12px; }
+  .flight-status { min-height: 35px; padding-right: 10px; font-size: 9px; }
+  .flight-telemetry { min-width: 0; }
+  .sector-readout, .heading-readout { font-size: 9px; }
   .flight-controls { display: none; }
-  .reticle { top: 47%; }
-  .approach-card { right: 12px; bottom: 145px; width: min(290px, calc(100% - 24px)); padding: 14px; }
-  .approach-card h2 { font-size: 20px; }
-  .landing-panel { left: 12px; bottom: 16px; width: calc(100% - 24px); max-height: calc(100vh - 93px); padding: 21px; }
-  .landing-panel h1 { font-size: 38px; }
-  .archive-overlay, .media-popup { padding: 77px 9px 9px; }
-  .archive-header { padding: 17px 17px 10px; }
-  .archive-heading h2 { font-size: 23px; }
+  .flight-ui.has-approach .flight-hero { display: none; }
+  .approach-card { right: auto; bottom: 154px; left: 12px; width: min(320px, calc(100% - 24px)); max-height: calc(100vh - 278px); overflow-y: auto; padding: 18px; }
+  .landing-panel { right: 12px; bottom: 12px; left: 12px; width: auto; max-height: calc(100vh - 132px); padding: 22px; }
+  .landing-panel h1 { font-size: 45px; }
+  .loading-panel { width: calc(100% - 24px); padding: 22px; }
+  .archive-overlay, .media-popup { padding: 119px 8px 8px; }
+  .archive-header { padding: 18px 17px 12px; }
+  .archive-heading h2 { font-size: 31px; }
   .archive-tabs { margin: 0 17px; }
-  .archive-content { padding: 14px 17px 17px; }
+  .archive-content { padding: 17px; }
   .archive-grid { grid-template-columns: 1fr; }
+  .media-popup-body { padding: 20px; }
+  .media-popup-body h2 { font-size: 30px; }
+  .no-webgl-fallback { inset: 107px 0 0; padding: 26px 16px 65px; }
 }
 
 @media (hover: none), (pointer: coarse) {
   .touch-controls {
     position: absolute;
     right: 12px;
-    bottom: 36px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
     left: 12px;
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 4px;
-    max-height: 92px;
+    gap: 8px;
     pointer-events: auto;
   }
   .touch-control {
     min-width: 0;
     min-height: 44px;
-    padding: 3px 1px;
+    padding: 4px 2px;
     border: 1px solid var(--line);
-    border-radius: 7px;
-    color: var(--ink);
     background: var(--surface);
-    font-size: 9px;
-    font-weight: 800;
+    color: var(--ink);
+    font: 600 11px/1.05 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+    letter-spacing: .01em;
+    text-transform: uppercase;
     touch-action: none;
   }
-  .touch-control:active { border-color: var(--accent); color: var(--accent); }
-  .flight-hud { bottom: 140px; }
-  .atlas-panel { max-height: min(35vh, 230px); }
+  .touch-control:active { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .flight-hud { bottom: calc(118px + env(safe-area-inset-bottom)); }
+  .atlas-panel { max-height: min(48vh, calc(100vh - 270px)); }
+  .atlas-panel.compact { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  .approach-card { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  .landing-panel { bottom: calc(118px + env(safe-area-inset-bottom)); max-height: calc(100vh - 225px); }
 }
 
-@media (max-width: 420px) and (pointer: coarse) {
-  .touch-controls { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-  .touch-control { font-size: 8px; }
-  .atlas-panel { top: 220px; }
+@media (max-width: 680px) and (pointer: coarse) {
+  .flight-hud { bottom: calc(116px + env(safe-area-inset-bottom)); }
+  .atlas-panel { bottom: calc(202px + env(safe-area-inset-bottom)); max-height: min(42vh, calc(100vh - 330px)); }
+  .atlas-panel.compact { bottom: calc(202px + env(safe-area-inset-bottom)); }
+  .approach-card { bottom: calc(202px + env(safe-area-inset-bottom)); max-height: calc(100vh - 325px); }
+}
+
+@media (max-width: 420px) {
+  .world-kind { font-size: 9px; }
+  .world-select { gap: 7px; }
+  .atlas-footer { font-size: 9px; }
+  .touch-control { font-size: 10px; }
+}
+
+@media (max-width: 390px) and (pointer: coarse) {
+  .touch-controls { gap: 4px; }
+}
+
+@media (max-width: 360px) and (pointer: coarse) {
+  .touch-controls { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .flight-hud { bottom: calc(162px + env(safe-area-inset-bottom)); }
+  .atlas-panel.compact { bottom: calc(246px + env(safe-area-inset-bottom)); }
+  .approach-card { bottom: calc(246px + env(safe-area-inset-bottom)); max-height: calc(100vh - 368px); }
+}
+
+@media (max-height: 590px) and (min-width: 681px) {
+  .flight-hero { top: 91px; width: min(310px, 35vw); padding: 16px; }
+  .flight-hero h1 { margin: 11px 0 7px; font-size: 40px; }
+  .flight-hero p { margin-top: 10px; font-size: 13px; line-height: 1.35; }
+  .orbit-label { margin-top: 10px; padding-top: 8px; }
+  .atlas-panel { top: 90px; max-height: calc(100vh - 168px); }
+  .flight-hud { bottom: 10px; }
+}
+
+@media (max-height: 780px) and (min-width: 681px) {
+  .flight-ui.has-approach .flight-hero { display: none; }
+}
+
+@media (max-height: 520px) and (pointer: coarse) {
+  .site-header { height: 64px; }
+  .site-header::after { bottom: -2px; }
+  .brand { position: static; }
+  .brand-descriptor { display: none; }
+  .site-nav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; height: 100%; margin-left: auto; }
+  .site-nav > .theme-button { max-width: none; min-height: 44px; margin: 0; }
+  .site-header { display: flex; }
+  .flight-hero { top: 76px; left: 12px; width: min(260px, 34vw); padding: 11px 13px; }
+  .flight-hero h1 { font-size: 33px; }
+  .flight-hero p, .orbit-label { display: none; }
+  .atlas-panel { top: 76px; right: 12px; bottom: auto; width: min(300px, 40vw); max-height: max(110px, calc(100vh - 245px)); }
+  .atlas-panel.compact { top: 76px; right: 12px; bottom: auto; }
+  .flight-ui.has-approach .atlas-panel.compact { top: 76px; }
+  .flight-hud { right: 12px; bottom: 108px; left: 12px; min-height: 48px; padding: 6px 10px; }
+  .touch-controls { bottom: 5px; gap: 4px; }
+  .touch-control { min-height: 38px; font-size: 10px; }
+  .approach-card { right: auto; bottom: 165px; left: 12px; max-height: calc(100vh - 240px); }
+  .landing-panel { top: 76px; bottom: 108px; width: min(400px, 48vw); max-height: none; }
+  .archive-overlay, .media-popup { padding-top: 72px; }
+  .no-webgl-fallback { inset: 64px 0 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
