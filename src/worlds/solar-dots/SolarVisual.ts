@@ -52,7 +52,6 @@ export class SolarVisual {
 
     const particleTexture = this.trackTexture(makeRadialTexture(64, 5.4))
     const glowTexture = this.trackTexture(makeRadialTexture(128, 3.1))
-    const acidHaloTexture = this.trackTexture(makeHaloTexture(128))
     const nebulaTexture = this.trackTexture(makeNebulaTexture(256))
 
     this.dustPositions = new Float32Array(this.capacity * 3)
@@ -122,48 +121,48 @@ export class SolarVisual {
     this.scene.add(this.violetGlow)
 
     this.outerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
-      map: acidHaloTexture,
-      color: 0x53ff00,
+      map: glowTexture,
+      color: 0xffa132,
       transparent: true,
-      opacity: 0.78,
+      opacity: 0.61,
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
     })))
-    this.outerGlow.scale.set(42, 42, 1)
+    this.outerGlow.scale.set(36, 36, 1)
     this.outerGlow.renderOrder = 4
     this.scene.add(this.outerGlow)
 
     this.core = new THREE.Mesh(
       this.trackGeometry(new THREE.SphereGeometry(CORE_RADIUS, 32, 20)),
       this.trackMaterial(new THREE.MeshPhongMaterial({
-        color: 0x83eb06,
-        emissive: 0x276800,
-        emissiveIntensity: 0.34,
-        specular: 0xeaff66,
+        color: 0xffa73d,
+        emissive: 0xa1450e,
+        emissiveIntensity: 0.65,
+        specular: 0xffe9a8,
         shininess: 58,
       })),
     )
     this.core.renderOrder = 5
     this.scene.add(this.core)
-    this.scene.add(new THREE.AmbientLight(0xd3efa4, 0.42))
-    const coreLight = new THREE.DirectionalLight(0xe8ff58, 1.1)
+    this.scene.add(new THREE.AmbientLight(0xffbd75, 0.62))
+    const coreLight = new THREE.DirectionalLight(0xffe6af, 2.2)
     coreLight.position.set(-7, 8, 11)
     this.scene.add(coreLight)
-    const coolFill = new THREE.DirectionalLight(0x8598d9, 0.35)
+    const coolFill = new THREE.DirectionalLight(0x8598d9, 0.78)
     coolFill.position.set(8, -5, -9)
     this.scene.add(coolFill)
 
     this.innerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
       map: glowTexture,
-      color: 0xf7ff46,
+      color: 0xffd88a,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.26,
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
     })))
-    this.innerGlow.scale.set(7, 7, 1)
+    this.innerGlow.scale.set(8, 8, 1)
     this.innerGlow.renderOrder = 6
     this.scene.add(this.innerGlow)
 
@@ -263,9 +262,9 @@ export class SolarVisual {
     this.camera.lookAt(0, -15 * mobileCrop, 0)
 
     const breathe = Math.sin(this.elapsed * 2.1) * 0.035
-    this.outerGlow.scale.setScalar(42 * (1 + breathe))
+    this.outerGlow.scale.setScalar(36 * (1 + breathe))
     this.violetGlow.scale.setScalar(72 * (1 - breathe * 0.6))
-    this.innerGlow.scale.setScalar(7 * (1 + breathe * 0.6))
+    this.innerGlow.scale.setScalar(8 * (1 + breathe * 0.6))
     this.core.scale.setScalar(1 + breathe * 0.25)
     this.corona.rotation.y += frame * 0.12
   }
@@ -434,10 +433,9 @@ export class SolarVisual {
       positions[offset + 1] = (hash01(index * 7 + 4) - 0.5) * 0.36
       positions[offset + 2] = Math.sin(angle) * radius
       const falloff = 1 - (radius - 2.8) / 9
-      const yellow = hash01(index * 7 + 5) > 0.48
-      colors[offset] = (yellow ? 0.94 : 0.2) * falloff
-      colors[offset + 1] = (yellow ? 0.94 : 0.98) * falloff
-      colors[offset + 2] = (yellow ? 0.1 : 0.025) * falloff
+      colors[offset] = 0.88 * falloff
+      colors[offset + 1] = 0.46 * falloff
+      colors[offset + 2] = 0.12 * falloff
     }
     const geometry = this.trackGeometry(new THREE.BufferGeometry())
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -521,29 +519,6 @@ function makeRadialTexture(size: number, falloff: number): THREE.DataTexture {
       pixels[offset + 1] = 255
       pixels[offset + 2] = 255
       pixels[offset + 3] = Math.round(Math.exp(-radiusSquared * falloff) * 255 * THREE.MathUtils.clamp(1 - radiusSquared, 0, 1))
-    }
-  }
-  const texture = new THREE.DataTexture(pixels, size, size, THREE.RGBAFormat)
-  texture.magFilter = THREE.LinearFilter
-  texture.minFilter = THREE.LinearFilter
-  texture.needsUpdate = true
-  return texture
-}
-
-function makeHaloTexture(size: number): THREE.DataTexture {
-  const pixels = new Uint8Array(size * size * 4)
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = ((x + 0.5) / size - 0.5) * 2
-      const dy = ((y + 0.5) / size - 0.5) * 2
-      const radiusSquared = dx * dx + dy * dy
-      const offset = (y * size + x) * 4
-      const hollowCenter = 1 - Math.exp(-radiusSquared * 90)
-      const haze = Math.exp(-radiusSquared * 4) * THREE.MathUtils.clamp(1 - radiusSquared, 0, 1)
-      pixels[offset] = 255
-      pixels[offset + 1] = 255
-      pixels[offset + 2] = 255
-      pixels[offset + 3] = Math.round(255 * hollowCenter * haze)
     }
   }
   const texture = new THREE.DataTexture(pixels, size, size, THREE.RGBAFormat)
