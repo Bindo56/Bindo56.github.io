@@ -31,6 +31,7 @@ export class SolarVisual {
   private elevation = 0.53
   private targetDistance = BASE_DISTANCE
   private distance = BASE_DISTANCE
+  private userZoomed = false
   private elapsed = 0
   private disposed = false
 
@@ -211,12 +212,10 @@ export class SolarVisual {
     this.azimuth = THREE.MathUtils.lerp(this.azimuth, this.targetAzimuth, catchUp)
     this.elevation = THREE.MathUtils.lerp(this.elevation, this.targetElevation, catchUp)
 
-    // A narrow viewport needs more distance to fit the complete orbital disk.
+    // Fit the first view to the viewport, then let explicit zoom crop the disk.
     const aspect = THREE.MathUtils.clamp(this.camera.aspect || 1, 0.36, 3)
-    const verticalHalfAngle = THREE.MathUtils.degToRad(this.camera.fov / 2)
     const mobileCrop = THREE.MathUtils.clamp((0.82 - aspect) / 0.38, 0, 1)
-    const frameDistance = (DISK_RADIUS * (1.16 - mobileCrop * 0.4)) / (Math.tan(verticalHalfAngle) * Math.min(1, aspect))
-    const wantedDistance = Math.max(this.targetDistance, frameDistance)
+    const wantedDistance = this.userZoomed ? this.targetDistance : Math.max(this.targetDistance, this.fitDistance())
     this.distance = THREE.MathUtils.lerp(this.distance, wantedDistance, catchUp)
 
     const flat = this.distance * Math.cos(this.elevation)
@@ -247,7 +246,17 @@ export class SolarVisual {
   /** Wheel-style delta: positive moves away, negative moves closer. */
   zoom(delta: number): void {
     if (this.disposed || !Number.isFinite(delta)) return
-    this.targetDistance = THREE.MathUtils.clamp(this.targetDistance * Math.exp(delta * 0.001), 56, 180)
+    const startingDistance = this.userZoomed ? this.targetDistance : Math.max(this.distance, this.fitDistance())
+    this.userZoomed = true
+    const minimum = this.camera.aspect < 0.7 ? 60 : 40
+    this.targetDistance = THREE.MathUtils.clamp(startingDistance * Math.exp(delta * 0.001), minimum, 220)
+  }
+
+  private fitDistance(): number {
+    const aspect = THREE.MathUtils.clamp(this.camera.aspect || 1, 0.36, 3)
+    const verticalHalfAngle = THREE.MathUtils.degToRad(this.camera.fov / 2)
+    const mobileCrop = THREE.MathUtils.clamp((0.82 - aspect) / 0.38, 0, 1)
+    return (DISK_RADIUS * (1.16 - mobileCrop * 0.4)) / (Math.tan(verticalHalfAngle) * Math.min(1, aspect))
   }
 
   dispose(): void {

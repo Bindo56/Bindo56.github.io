@@ -73,9 +73,11 @@ const module: PlanetModule = {
     let started = false
     let paused = false
     let disposed = false
-    let dragging = false
+    const activePointers = new Map<number, { x: number; y: number }>()
+    let pinchDistance = 0
     let lastX = 0
     let lastY = 0
+    let playbackSpeed = 2
     let statsClock = 0
     let stableClock = 0
     let challengeComplete = false
@@ -153,15 +155,33 @@ const module: PlanetModule = {
     speedInput.dataset.testid = 'solar-speed'
     speedLabel.htmlFor = speedInput.id
     speedLabel.append(speedOutput, speedInput)
+    const playbackLabel = el('label', '', 'Simulation speed')
+    const playbackOutput = el('output', '', '2.0×')
+    const playbackInput = el('input', '')
+    playbackInput.type = 'range'
+    playbackInput.min = '0.5'
+    playbackInput.max = '4'
+    playbackInput.step = '0.25'
+    playbackInput.value = '2'
+    playbackInput.id = 'solar-playback-speed'
+    playbackInput.dataset.testid = 'solar-playback-speed'
+    playbackLabel.htmlFor = playbackInput.id
+    playbackLabel.append(playbackOutput, playbackInput)
     gravityInput.addEventListener('input', () => {
       gravityOutput.textContent = gravityInput.value
       status.textContent = 'Gravity set. Launch the swarm to apply it.'
     })
     speedInput.addEventListener('input', () => {
       speedOutput.textContent = Number(speedInput.value).toFixed(2) + '×'
-      status.textContent = 'Speed set. Launch the swarm to apply it.'
+      status.textContent = 'Launch speed set. Launch the swarm to apply it.'
     })
-    sliders.append(gravityLabel, speedLabel)
+    playbackInput.addEventListener('input', () => {
+      playbackSpeed = Number(playbackInput.value)
+      playbackOutput.textContent = playbackSpeed.toFixed(1) + '×'
+      miniSpeed.textContent = 'SIM ' + playbackSpeed.toFixed(1) + '×'
+      status.textContent = 'Simulation speed: ' + playbackSpeed.toFixed(1) + '×.'
+    })
+    sliders.append(gravityLabel, speedLabel, playbackLabel)
 
     const actions = el('div', 'solar-actions')
     const launchButton = el('button', 'primary-button', 'Launch swarm ↗')
@@ -196,7 +216,25 @@ const module: PlanetModule = {
     mini.setAttribute('aria-label', 'Browser simulation status')
     mini.append(el('span', '', 'BROWSER SIMULATION'), document.createElement('br'))
     const miniCount = el('strong', '', world.capacity.toLocaleString() + ' BODIES')
-    mini.append(miniCount, document.createElement('br'), el('small', '', 'DRAG TO ORBIT · SCROLL TO ZOOM'))
+    const miniSpeed = el('small', 'solar-mini-speed', 'SIM 2.0×')
+    const zoomControls = el('div', 'solar-zoom-controls')
+    zoomControls.setAttribute('role', 'group')
+    zoomControls.setAttribute('aria-label', 'Simulation camera zoom')
+    const zoomOut = el('button', 'solar-zoom-out', '−')
+    zoomOut.type = 'button'
+    zoomOut.setAttribute('aria-label', 'Zoom out')
+    zoomOut.dataset.testid = 'solar-zoom-out'
+    const zoomIn = el('button', 'solar-zoom-in', '+')
+    zoomIn.type = 'button'
+    zoomIn.setAttribute('aria-label', 'Zoom in')
+    zoomIn.dataset.testid = 'solar-zoom-in'
+    zoomControls.append(zoomOut, zoomIn)
+    zoomOut.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(230) })
+    zoomIn.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(-230) })
+    const zoomHint = window.matchMedia('(pointer: coarse)').matches
+      ? 'DRAG TO ORBIT · PINCH OR TAP +/− TO ZOOM'
+      : 'DRAG TO ORBIT · SCROLL OR TAP +/− TO ZOOM'
+    mini.append(miniCount, document.createElement('br'), miniSpeed, document.createElement('br'), el('small', '', zoomHint), zoomControls)
     root.append(intro, controls, mini)
     host.uiRoot.replaceChildren(root)
 
@@ -237,25 +275,47 @@ const module: PlanetModule = {
     resetButton.addEventListener('click', () => {
       gravityInput.value = '650'
       speedInput.value = '1'
+      playbackInput.value = '2'
+      playbackSpeed = 2
       gravityOutput.textContent = '650'
       speedOutput.textContent = '1.00×'
+      playbackOutput.textContent = '2.0×'
+      miniSpeed.textContent = 'SIM 2.0×'
       launch()
     })
 
+    const pointerDistance = (): number => {
+      const [first, second] = [...activePointers.values()]
+      return first && second ? Math.hypot(first.x - second.x, first.y - second.y) : 0
+    }
     const onPointerDown = (event: PointerEvent): void => {
       if (!started || !host.isInteractive()) return
-      dragging = true
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       lastX = event.clientX
       lastY = event.clientY
+      if (activePointers.size >= 2) pinchDistance = pointerDistance()
       host.canvas.setPointerCapture(event.pointerId)
     }
     const onPointerMove = (event: PointerEvent): void => {
-      if (!dragging || !host.isInteractive()) return
+      if (!activePointers.has(event.pointerId) || !host.isInteractive()) return
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (activePointers.size >= 2) {
+        const nextDistance = pointerDistance()
+        if (pinchDistance > 0) visual.zoom((pinchDistance - nextDistance) * 2)
+        pinchDistance = nextDistance
+        return
+      }
       visual.orbit(event.clientX - lastX, event.clientY - lastY)
       lastX = event.clientX
       lastY = event.clientY
     }
-    const onPointerUp = (): void => { dragging = false }
+    const onPointerUp = (event: PointerEvent): void => {
+      activePointers.delete(event.pointerId)
+      pinchDistance = activePointers.size >= 2 ? pointerDistance() : 0
+      const remaining = activePointers.values().next().value
+      if (remaining) { lastX = remaining.x; lastY = remaining.y }
+    }
+    const onBlur = (): void => { activePointers.clear(); pinchDistance = 0 }
     const onWheel = (event: WheelEvent): void => {
       if (!started || !host.isInteractive()) return
       event.preventDefault()
@@ -273,6 +333,8 @@ const module: PlanetModule = {
       else if (event.code === 'ArrowRight') visual.orbit(12, 0)
       else if (event.code === 'ArrowUp') visual.orbit(0, -12)
       else if (event.code === 'ArrowDown') visual.orbit(0, 12)
+      else if (event.code === 'Equal' || event.code === 'NumpadAdd') visual.zoom(-100)
+      else if (event.code === 'Minus' || event.code === 'NumpadSubtract') visual.zoom(100)
     }
     host.canvas.addEventListener('pointerdown', onPointerDown)
     host.canvas.addEventListener('pointermove', onPointerMove)
@@ -280,7 +342,7 @@ const module: PlanetModule = {
     host.canvas.addEventListener('pointercancel', onPointerUp)
     host.canvas.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('blur', onPointerUp)
+    window.addEventListener('blur', onBlur)
     renderStats()
 
     return {
@@ -290,8 +352,8 @@ const module: PlanetModule = {
         if (disposed) return
         const interactive = host.isInteractive() && !document.hidden
         const step = started
-          ? (interactive && !paused ? dt * (reducedMotion ? 0.3 : 1) : 0)
-          : (interactive && !reducedMotion ? dt * 0.28 : 0)
+          ? (interactive && !paused ? dt * playbackSpeed * (reducedMotion ? 0.3 : 1) : 0)
+          : (interactive && !reducedMotion ? dt * 0.8 : 0)
         if (step > 0) {
           simulation.update(step)
           visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities)
@@ -316,7 +378,7 @@ const module: PlanetModule = {
         host.canvas.removeEventListener('pointercancel', onPointerUp)
         host.canvas.removeEventListener('wheel', onWheel)
         window.removeEventListener('keydown', onKeyDown)
-        window.removeEventListener('blur', onPointerUp)
+        window.removeEventListener('blur', onBlur)
         host.uiRoot.replaceChildren()
         world.dispose()
       },

@@ -37,7 +37,7 @@ Run the full test command before pushing. The existing Pages workflow runs the u
 
 Touch screens show buttons for every flight action. Select a destination in the flight manifest, then use **Warp to orbit** or fly there manually.
 
-In Solar DOTS, choose Orbit, Plunge, or Escape; tune gravity and launch speed; then launch the swarm. Drag or use the arrow keys to orbit the camera, scroll to zoom, press Space to pause, and use Return to space or Escape to leave. The browser simulation is a Three.js interpretation of the [original Unity ECS and Burst project](https://github.com/Bindo56/DOTS_SolarSystem), with its [video](https://www.youtube.com/watch?v=gQo_Rgpgzwg) linked in the world.
+In Solar DOTS, choose Orbit, Plunge, or Escape; tune gravity, launch speed, and simulation speed; then launch the swarm. The simulation starts at 2× speed. Drag or use the arrow keys to orbit the camera; use the zoom buttons, pinch, or scroll wheel to zoom. Press Space to pause, and use Return to space or Escape to leave. The browser simulation is a Three.js interpretation of the [original Unity ECS and Burst project](https://github.com/Bindo56/DOTS_SolarSystem), with its [video](https://www.youtube.com/watch?v=gQo_Rgpgzwg) linked in the world.
 
 ## Routes and code
 

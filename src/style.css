@@ -821,6 +821,19 @@ a { color: inherit; }
   font-variant-numeric: tabular-nums;
 }
 .solar-mini-hud :is(span, small) { color: var(--muted); }
+.solar-mini-hud .solar-mini-speed { display: block; margin-top: 4px; color: var(--accent); }
+.solar-zoom-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.solar-zoom-controls button {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: 600 23px/1 'IBM Plex Mono', Consolas, monospace;
+}
+.solar-zoom-controls button:hover { border-color: var(--accent); color: var(--accent); }
+.solar-zoom-controls button:active { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 
 @media (max-width: 900px) {
   .solar-intro, .solar-control-panel { left: 20px; width: min(330px, 41vw); padding: 18px; }
