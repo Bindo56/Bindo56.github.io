@@ -1,5 +1,6 @@
 import { projects } from '../data/projects.ts'
 import type { PlanetDefinition, PlanetHost, PlanetModule, PlanetSession, PreparedPlanet } from '../app/PlanetContracts.ts'
+import { ORBITAL_LANES } from './solar-dots/OrbitalLanes.ts'
 import { SolarSimulation, type SolarPreset } from './solar-dots/SolarSimulation.ts'
 import { SolarVisual } from './solar-dots/SolarVisual.ts'
 
@@ -44,7 +45,7 @@ const module: PlanetModule = {
     const simulation = new SolarSimulation(capacity, 7057)
     simulation.launch('orbit', 650, 1, capacity)
     const visual = new SolarVisual(capacity)
-    visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities)
+    visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities, simulation.lanes)
     let disposed = false
     const prepared: PreparedSolar = {
       scene: visual.scene,
@@ -92,7 +93,7 @@ const module: PlanetModule = {
     intro.append(
       el('span', 'eyebrow', 'PLAYABLE WORLD / UNITY DOTS PROJECT'),
       title,
-      el('p', '', 'Launch a swarm. Change its speed and gravity. Watch thousands of bodies orbit, fall inward, or escape.'),
+      el('p', '', 'Launch five stone belts. Change their speed and gravity. Watch thousands of bodies orbit, fall inward, or escape.'),
       el('p', 'solar-intro-note', 'Inspired by my Unity ECS and Burst solar-system simulation. This playable version runs in Three.js.'),
     )
     const start = el('button', 'primary-button', 'Start experimenting ↗')
@@ -112,7 +113,7 @@ const module: PlanetModule = {
     controls.append(
       el('span', 'eyebrow', 'EXPERIMENT 001 / CENTRAL GRAVITY'),
       el('h2', '', 'Solar DOTS'),
-      el('p', '', 'Choose a path, tune the launch, and watch the swarm respond.'),
+      el('p', '', 'Each colored orbit carries a different stone family. Tune the launch and watch them respond.'),
     )
     const presets = el('div', 'solar-presets')
     presets.setAttribute('role', 'group')
@@ -200,6 +201,15 @@ const module: PlanetModule = {
     const captured = metric(stats, 'Captured')
     const escaped = metric(stats, 'Escaped')
     const elapsed = metric(stats, 'Elapsed')
+    const laneLegend = el('div', 'solar-lane-legend')
+    laneLegend.setAttribute('role', 'group')
+    laneLegend.setAttribute('aria-label', 'Stone families by orbital line')
+    for (const lane of ORBITAL_LANES) {
+      const item = el('span', 'solar-lane-chip')
+      item.style.setProperty('--lane-color', '#' + lane.color.toString(16).padStart(6, '0'))
+      item.append(el('strong', '', lane.name), el('small', '', lane.stoneLabel))
+      laneLegend.append(item)
+    }
     const controlsLinks = el('div', 'solar-links')
     if (project?.github) controlsLinks.append(external('Original Unity source ↗', project.github))
     if (project?.video) controlsLinks.append(external('Original video ↗', project.video))
@@ -210,7 +220,7 @@ const module: PlanetModule = {
       el('p', '', 'The Unity version updates many entities with ECS systems and Burst jobs. Each body accelerates toward a fixed center, then exits the simulation at an inner or outer boundary.'),
       el('p', '', 'This browser version recreates that central-gravity experiment with typed arrays and batched Three.js particles.'),
     )
-    controls.append(presets, sliders, actions, status, stats, controlsLinks, proof, buildNotes)
+    controls.append(presets, sliders, actions, status, stats, laneLegend, controlsLinks, proof, buildNotes)
 
     const mini = el('aside', 'solar-mini-hud')
     mini.setAttribute('aria-label', 'Browser simulation status')
@@ -254,7 +264,7 @@ const module: PlanetModule = {
       challengeComplete = false
       pauseButton.textContent = 'Pause'
       status.textContent = PRESETS.find(item => item[0] === preset)?.[2] ?? ''
-      visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities)
+      visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities, simulation.lanes)
       renderStats()
     }
 
@@ -358,7 +368,7 @@ const module: PlanetModule = {
           : (interactive && !reducedMotion ? dt * 0.8 : 0)
         if (step > 0) {
           simulation.update(step)
-          visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities)
+          visual.setParticles(simulation.positions, simulation.states, simulation.count, simulation.velocities, simulation.lanes)
         }
         visual.update(reducedMotion ? 0 : interactive ? dt : 0)
         if (started && step > 0 && preset === 'orbit' && !challengeComplete) {

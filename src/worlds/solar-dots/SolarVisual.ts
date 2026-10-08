@@ -1,8 +1,17 @@
 import * as THREE from 'three'
+import { ORBITAL_LANES, type StoneKind } from './OrbitalLanes.ts'
 
 const DISK_RADIUS = 34
 const CORE_RADIUS = 2.45
 const BASE_DISTANCE = 86
+
+interface StoneBatch {
+  mesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
+  limit: number
+  count: number
+  selectionRate: number
+  baseScale: number
+}
 
 /** Procedural solar scene. AppShell owns the renderer, resize, and frame loop. */
 export class SolarVisual {
@@ -22,6 +31,8 @@ export class SolarVisual {
   private readonly outerGlow: THREE.Sprite
   private readonly innerGlow: THREE.Sprite
   private readonly corona: THREE.Points
+  private readonly stoneBatches: StoneBatch[] = []
+  private readonly stoneTransform = new THREE.Object3D()
   private readonly geometries: THREE.BufferGeometry[] = []
   private readonly materials: THREE.Material[] = []
   private readonly textures: THREE.Texture[] = []
@@ -82,6 +93,7 @@ export class SolarVisual {
 
     this.addStarfield()
     this.addOrbitalGuides()
+    this.addStoneBatches()
 
     this.nebula = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
       map: nebulaTexture,
@@ -137,6 +149,9 @@ export class SolarVisual {
     const coreLight = new THREE.DirectionalLight(0xffe6af, 2.2)
     coreLight.position.set(-7, 8, 11)
     this.scene.add(coreLight)
+    const coolFill = new THREE.DirectionalLight(0x8598d9, 0.78)
+    coolFill.position.set(8, -5, -9)
+    this.scene.add(coolFill)
 
     this.innerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
       map: glowTexture,
@@ -156,12 +171,13 @@ export class SolarVisual {
     this.update(0)
   }
 
-  /** Copies orbiting bodies into two dynamic point batches. Faster bodies burn warmer. */
-  setParticles(positions: Float32Array, states: Uint8Array, count: number, velocities?: Float32Array): void {
+  /** Copies orbiting bodies into point batches and a small instanced stone sample. */
+  setParticles(positions: Float32Array, states: Uint8Array, count: number, velocities?: Float32Array, laneIds?: Uint8Array): void {
     if (this.disposed) return
     const length = Math.min(this.capacity, Math.max(0, Math.floor(count)), states.length, Math.floor(positions.length / 3))
     let dustCount = 0
     let emberCount = 0
+    for (const batch of this.stoneBatches) batch.count = 0
 
     for (let index = 0; index < length; index++) {
       const state = states[index]
@@ -171,6 +187,7 @@ export class SolarVisual {
       const y = positions[source + 1]
       const z = positions[source + 2]
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue
+      if (laneIds && index < laneIds.length) this.placeStone(index, laneIds[index], x, y, z)
 
       const radius = Math.hypot(x, y, z)
       const innerHeat = THREE.MathUtils.clamp(1 - (radius - 8) / 27, 0, 1)
@@ -216,6 +233,10 @@ export class SolarVisual {
     this.emberGeometry.setDrawRange(0, emberCount)
     markUpdated(this.dustGeometry, dustCount)
     markUpdated(this.emberGeometry, emberCount)
+    for (const batch of this.stoneBatches) {
+      batch.mesh.count = batch.count
+      if (batch.count > 0) batch.mesh.instanceMatrix.needsUpdate = true
+    }
   }
 
   update(dt: number): void {
@@ -276,6 +297,7 @@ export class SolarVisual {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    for (const batch of this.stoneBatches) batch.mesh.dispose()
     this.scene.clear()
     this.geometries.forEach(geometry => geometry.dispose())
     this.materials.forEach(material => material.dispose())
@@ -314,31 +336,88 @@ export class SolarVisual {
   }
 
   private addOrbitalGuides(): void {
-    for (const [radius, opacity, tiltX, tiltZ] of [
-      [8, 0.13, 0, 0],
-      [21, 0.095, 0.34, -0.2],
-      [34, 0.16, -0.29, 0.13],
-    ] as const) {
-      const count = 192
-      const positions = new Float32Array(count * 3)
-      for (let index = 0; index < count; index++) {
-        const angle = index / count * Math.PI * 2
-        positions[index * 3] = Math.cos(angle) * radius
-        positions[index * 3 + 1] = -0.35
-        positions[index * 3 + 2] = Math.sin(angle) * radius
-      }
-      const geometry = this.trackGeometry(new THREE.BufferGeometry())
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-      const material = this.trackMaterial(new THREE.LineBasicMaterial({
-        color: radius === 34 ? 0x905e7f : 0xa56c59,
-        transparent: true,
-        opacity,
-        depthWrite: false,
-      }))
-      const guide = new THREE.LineLoop(geometry, material)
-      guide.rotation.set(tiltX, 0, tiltZ)
-      this.scene.add(guide)
+    for (const lane of ORBITAL_LANES) {
+      // TorusGeometry lies in XY; this basis is the simulation's e1/e2 plane.
+      const e1 = new THREE.Vector3(Math.cos(lane.node), 0, Math.sin(lane.node))
+      const e2 = new THREE.Vector3(
+        -Math.sin(lane.node) * Math.cos(lane.inclination),
+        Math.sin(lane.inclination),
+        Math.cos(lane.node) * Math.cos(lane.inclination),
+      )
+      const normal = new THREE.Vector3().crossVectors(e1, e2).normalize()
+      const orientation = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(e1, e2, normal))
+
+      const glow = new THREE.Mesh(
+        this.trackGeometry(new THREE.TorusGeometry(lane.radius, 0.38, 3, 176)),
+        this.trackMaterial(new THREE.MeshBasicMaterial({
+          color: lane.color,
+          transparent: true,
+          opacity: 0.17,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending,
+        })),
+      )
+      glow.quaternion.copy(orientation)
+      glow.renderOrder = 0
+      this.scene.add(glow)
+
+      const filament = new THREE.Mesh(
+        this.trackGeometry(new THREE.TorusGeometry(lane.radius, 0.105, 4, 176)),
+        this.trackMaterial(new THREE.MeshBasicMaterial({
+          color: lane.color,
+          transparent: true,
+          opacity: 0.82,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          blending: THREE.AdditiveBlending,
+        })),
+      )
+      filament.quaternion.copy(orientation)
+      filament.renderOrder = 1
+      this.scene.add(filament)
     }
+  }
+
+  private addStoneBatches(): void {
+    const limit = Math.min(52, Math.max(14, Math.ceil(this.capacity / 170)))
+    const selectionRate = Math.min(1, limit * ORBITAL_LANES.length / this.capacity)
+    for (const lane of ORBITAL_LANES) {
+      const profile = stoneProfile(lane.stone)
+      const geometry = this.trackGeometry(stoneGeometry(lane.stone))
+      const material = this.trackMaterial(new THREE.MeshStandardMaterial({
+        color: lane.color,
+        emissive: lane.color,
+        emissiveIntensity: profile.glow,
+        metalness: profile.metalness,
+        roughness: profile.roughness,
+        flatShading: true,
+      }))
+      const mesh = new THREE.InstancedMesh(geometry, material, limit)
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      mesh.count = 0
+      mesh.frustumCulled = false
+      this.scene.add(mesh)
+      this.stoneBatches[lane.id] = { mesh, limit, count: 0, selectionRate, baseScale: profile.scale }
+    }
+  }
+
+  private placeStone(index: number, laneId: number, x: number, y: number, z: number): void {
+    const batch = this.stoneBatches[laneId]
+    if (!batch || batch.count >= batch.limit || hash01(index + 47041) >= batch.selectionRate) return
+    const transform = this.stoneTransform
+    const size = batch.baseScale * (0.72 + hash01(index + 713) * 0.6)
+    const spin = this.elapsed * (0.18 + hash01(index + 217) * 0.27)
+    transform.position.set(x, y, z)
+    transform.rotation.set(
+      hash01(index + 167) * Math.PI * 2 + spin,
+      hash01(index + 283) * Math.PI * 2 - spin * 0.7,
+      hash01(index + 349) * Math.PI * 2 + spin * 0.4,
+    )
+    transform.scale.set(size, size * (0.78 + hash01(index + 431) * 0.38), size)
+    transform.updateMatrix()
+    batch.mesh.setMatrixAt(batch.count, transform.matrix)
+    batch.count++
   }
 
   private makeCorona(texture: THREE.Texture): THREE.Points {
@@ -388,6 +467,26 @@ export class SolarVisual {
   private trackTexture<T extends THREE.Texture>(texture: T): T {
     this.textures.push(texture)
     return texture
+  }
+}
+
+function stoneGeometry(kind: StoneKind): THREE.BufferGeometry {
+  switch (kind) {
+    case 'ember': return new THREE.IcosahedronGeometry(1, 0)
+    case 'amethyst': return new THREE.OctahedronGeometry(1, 0)
+    case 'ice': return new THREE.TetrahedronGeometry(1, 0)
+    case 'iron': return new THREE.DodecahedronGeometry(1, 0)
+    case 'gold': return new THREE.BoxGeometry(1.35, 0.9, 1.12)
+  }
+}
+
+function stoneProfile(kind: StoneKind): { scale: number; metalness: number; roughness: number; glow: number } {
+  switch (kind) {
+    case 'ember': return { scale: 0.47, metalness: 0.08, roughness: 0.78, glow: 0.22 }
+    case 'amethyst': return { scale: 0.65, metalness: 0.25, roughness: 0.35, glow: 0.17 }
+    case 'ice': return { scale: 0.72, metalness: 0.05, roughness: 0.24, glow: 0.14 }
+    case 'iron': return { scale: 0.64, metalness: 0.55, roughness: 0.8, glow: 0.04 }
+    case 'gold': return { scale: 0.58, metalness: 0.48, roughness: 0.44, glow: 0.12 }
   }
 }
 

@@ -1,3 +1,5 @@
+import { ORBITAL_LANES } from './OrbitalLanes.ts'
+
 export type SolarPreset = 'orbit' | 'plunge' | 'escape'
 
 const STEP = 1 / 120
@@ -18,6 +20,7 @@ export class SolarSimulation {
   readonly positions: Float32Array
   readonly velocities: Float32Array
   readonly states: Uint8Array
+  readonly lanes: Uint8Array
 
   count = 0
   captured = 0
@@ -37,6 +40,7 @@ export class SolarSimulation {
     this.positions = new Float32Array(this.capacity * 3)
     this.velocities = new Float32Array(this.capacity * 3)
     this.states = new Uint8Array(this.capacity)
+    this.lanes = new Uint8Array(this.capacity)
     this.seed = (Number.isFinite(seed) ? seed >>> 0 : 0x5eeda11) || 0x5eeda11
     this.randomState = this.seed
   }
@@ -64,17 +68,14 @@ export class SolarSimulation {
     this.positions.fill(0)
     this.velocities.fill(0)
     this.states.fill(0)
+    this.lanes.fill(0)
 
     for (let body = 0; body < this.count; body++) {
-      const radius = 8 + 26 * Math.sqrt(this.random())
+      const lane = ORBITAL_LANES[body % ORBITAL_LANES.length]
+      const radius = lane.radius + (this.random() - 0.5) * lane.width * 2
       const phase = this.random() * Math.PI * 2
-      const node = this.random() * Math.PI * 2
-      const band = this.random()
-      const inclination = band < 0.25
-        ? 0.18 + this.random() * 0.24
-        : band < 0.75
-          ? 0.48 + this.random() * 0.4
-          : 1.02 + this.random() * 0.32
+      const node = lane.node
+      const inclination = lane.inclination
       const jitter = 0.97 + this.random() * 0.06
       const orbitalSpeed = Math.sqrt(this.gravity / radius) * this.speed * jitter
       const tangentialSpeed = preset === 'plunge'
@@ -106,6 +107,7 @@ export class SolarSimulation {
       this.velocities[offset + 1] = tangentY * tangentialSpeed + radialY * radialSpeed
       this.velocities[offset + 2] = tangentZ * tangentialSpeed + radialZ * radialSpeed
       this.states[body] = 1
+      this.lanes[body] = lane.id
     }
   }
 
@@ -131,6 +133,7 @@ export class SolarSimulation {
     this.positions.fill(0)
     this.velocities.fill(0)
     this.states.fill(0)
+    this.lanes.fill(0)
     this.count = 0
     this.captured = 0
     this.escaped = 0

@@ -527,7 +527,7 @@ export class AppShell {
     if (push) history.pushState({ world: planet.slug }, '', pathForPlanet(planet))
     document.title = planet.title + ' | Saurabh Kundalwal'
     this.canvas.setAttribute('aria-label', planet.slug === 'event-horizon'
-      ? 'Solar DOTS gravity simulation with a gold central attractor and orbiting particles. Drag to orbit the camera and scroll to zoom.'
+      ? 'Solar DOTS gravity simulation with five colored orbital paths and varied stones around a gold central attractor. Drag to orbit the camera and scroll to zoom.'
       : planet.title + ' project world')
     if (!this.renderer || !this.space) {
       this.showFallback(planet)

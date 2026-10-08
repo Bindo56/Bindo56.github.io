@@ -796,6 +796,28 @@ a { color: inherit; }
   font: 700 24px/1 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
   font-variant-numeric: tabular-nums;
 }
+.solar-lane-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 12px; }
+.solar-lane-chip {
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+}
+.solar-lane-chip::before {
+  content: '';
+  grid-row: 1 / 3;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lane-color);
+  box-shadow: 0 0 9px var(--lane-color);
+}
+.solar-lane-chip strong { color: var(--ink); font: 600 11px/1.35 'IBM Plex Mono', Consolas, monospace; }
+.solar-lane-chip small { color: var(--muted); font: 500 10px/1.3 'IBM Plex Mono', Consolas, monospace; }
 .solar-control-panel > .secondary-button { margin-top: 15px; }
 .solar-build-notes { margin-top: 12px; border-top: 1px solid var(--line); }
 .solar-build-notes summary {
