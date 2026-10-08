@@ -229,8 +229,8 @@ const module: PlanetModule = {
     zoomIn.setAttribute('aria-label', 'Zoom in')
     zoomIn.dataset.testid = 'solar-zoom-in'
     zoomControls.append(zoomOut, zoomIn)
-    zoomOut.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(230) })
-    zoomIn.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(-230) })
+    zoomOut.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(115) })
+    zoomIn.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(-115) })
     const zoomHint = window.matchMedia('(pointer: coarse)').matches
       ? 'DRAG TO ORBIT · PINCH OR TAP +/− TO ZOOM'
       : 'DRAG TO ORBIT · SCROLL OR TAP +/− TO ZOOM'
@@ -289,7 +289,7 @@ const module: PlanetModule = {
       return first && second ? Math.hypot(first.x - second.x, first.y - second.y) : 0
     }
     const onPointerDown = (event: PointerEvent): void => {
-      if (!started || !host.isInteractive()) return
+      if (!host.isInteractive()) return
       activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       lastX = event.clientX
       lastY = event.clientY
@@ -317,9 +317,10 @@ const module: PlanetModule = {
     }
     const onBlur = (): void => { activePointers.clear(); pinchDistance = 0 }
     const onWheel = (event: WheelEvent): void => {
-      if (!started || !host.isInteractive()) return
+      if (!host.isInteractive()) return
       event.preventDefault()
-      visual.zoom(event.deltaY)
+      const wheelPixels = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1)
+      visual.zoom(Math.max(-300, Math.min(300, wheelPixels)))
     }
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!started || !host.isInteractive() || (event.target instanceof HTMLElement && /INPUT|BUTTON|A|SELECT|TEXTAREA/.test(event.target.tagName))) return
@@ -341,6 +342,7 @@ const module: PlanetModule = {
     host.canvas.addEventListener('pointerup', onPointerUp)
     host.canvas.addEventListener('pointercancel', onPointerUp)
     host.canvas.addEventListener('wheel', onWheel, { passive: false })
+    mini.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', onBlur)
     renderStats()
@@ -377,6 +379,7 @@ const module: PlanetModule = {
         host.canvas.removeEventListener('pointerup', onPointerUp)
         host.canvas.removeEventListener('pointercancel', onPointerUp)
         host.canvas.removeEventListener('wheel', onWheel)
+        mini.removeEventListener('wheel', onWheel)
         window.removeEventListener('keydown', onKeyDown)
         window.removeEventListener('blur', onBlur)
         host.uiRoot.replaceChildren()

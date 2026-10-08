@@ -12,7 +12,7 @@ function clamp(value: number, fallback: number, minimum: number, maximum: number
   return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback
 }
 
-/** A fixed-center gravity experiment. Bodies orbit in the XZ plane with slight Y scatter. */
+/** A fixed-center gravity experiment with deterministic inclined orbital planes. */
 export class SolarSimulation {
   readonly capacity: number
   readonly positions: Float32Array
@@ -67,7 +67,14 @@ export class SolarSimulation {
 
     for (let body = 0; body < this.count; body++) {
       const radius = 8 + 26 * Math.sqrt(this.random())
-      const angle = this.random() * Math.PI * 2
+      const phase = this.random() * Math.PI * 2
+      const node = this.random() * Math.PI * 2
+      const band = this.random()
+      const inclination = band < 0.25
+        ? 0.18 + this.random() * 0.24
+        : band < 0.75
+          ? 0.48 + this.random() * 0.4
+          : 1.02 + this.random() * 0.32
       const jitter = 0.97 + this.random() * 0.06
       const orbitalSpeed = Math.sqrt(this.gravity / radius) * this.speed * jitter
       const tangentialSpeed = preset === 'plunge'
@@ -77,15 +84,27 @@ export class SolarSimulation {
           : orbitalSpeed
       const radialSpeed = (this.random() - 0.5) * orbitalSpeed * 0.035
       const offset = body * 3
-      const cos = Math.cos(angle)
-      const sin = Math.sin(angle)
+      const cosPhase = Math.cos(phase)
+      const sinPhase = Math.sin(phase)
+      const cosNode = Math.cos(node)
+      const sinNode = Math.sin(node)
+      const cosInclination = Math.cos(inclination)
+      const sinInclination = Math.sin(inclination)
 
-      this.positions[offset] = radius * cos
-      this.positions[offset + 1] = (this.random() - 0.5) * 0.85
-      this.positions[offset + 2] = radius * sin
-      this.velocities[offset] = -sin * tangentialSpeed + cos * radialSpeed
-      this.velocities[offset + 1] = (this.random() - 0.5) * 0.045
-      this.velocities[offset + 2] = cos * tangentialSpeed + sin * radialSpeed
+      // Rotate radial and tangent unit vectors into the same orbital plane.
+      const radialX = cosPhase * cosNode - sinPhase * sinNode * cosInclination
+      const radialY = sinPhase * sinInclination
+      const radialZ = cosPhase * sinNode + sinPhase * cosNode * cosInclination
+      const tangentX = -sinPhase * cosNode - cosPhase * sinNode * cosInclination
+      const tangentY = cosPhase * sinInclination
+      const tangentZ = -sinPhase * sinNode + cosPhase * cosNode * cosInclination
+
+      this.positions[offset] = radius * radialX
+      this.positions[offset + 1] = radius * radialY
+      this.positions[offset + 2] = radius * radialZ
+      this.velocities[offset] = tangentX * tangentialSpeed + radialX * radialSpeed
+      this.velocities[offset + 1] = tangentY * tangentialSpeed + radialY * radialSpeed
+      this.velocities[offset + 2] = tangentZ * tangentialSpeed + radialZ * radialSpeed
       this.states[body] = 1
     }
   }

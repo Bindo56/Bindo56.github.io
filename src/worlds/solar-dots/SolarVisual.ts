@@ -25,10 +25,10 @@ export class SolarVisual {
   private readonly geometries: THREE.BufferGeometry[] = []
   private readonly materials: THREE.Material[] = []
   private readonly textures: THREE.Texture[] = []
-  private targetAzimuth = 0
-  private azimuth = 0
-  private targetElevation = 0.53
-  private elevation = 0.53
+  private targetAzimuth = 0.32
+  private azimuth = 0.32
+  private targetElevation = 0.42
+  private elevation = 0.42
   private targetDistance = BASE_DISTANCE
   private distance = BASE_DISTANCE
   private userZoomed = false
@@ -123,10 +123,20 @@ export class SolarVisual {
 
     this.core = new THREE.Mesh(
       this.trackGeometry(new THREE.SphereGeometry(CORE_RADIUS, 32, 20)),
-      this.trackMaterial(new THREE.MeshBasicMaterial({ color: 0xffbc50 })),
+      this.trackMaterial(new THREE.MeshPhongMaterial({
+        color: 0xffa73d,
+        emissive: 0xa1450e,
+        emissiveIntensity: 0.65,
+        specular: 0xffe9a8,
+        shininess: 58,
+      })),
     )
     this.core.renderOrder = 5
     this.scene.add(this.core)
+    this.scene.add(new THREE.AmbientLight(0xffbd75, 0.62))
+    const coreLight = new THREE.DirectionalLight(0xffe6af, 2.2)
+    coreLight.position.set(-7, 8, 11)
+    this.scene.add(coreLight)
 
     this.innerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
       map: glowTexture,
@@ -162,8 +172,12 @@ export class SolarVisual {
       const z = positions[source + 2]
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue
 
-      const radius = Math.hypot(x, z)
+      const radius = Math.hypot(x, y, z)
       const innerHeat = THREE.MathUtils.clamp(1 - (radius - 8) / 27, 0, 1)
+      const towardCamera = x * Math.sin(this.azimuth) * Math.cos(this.elevation)
+        + y * Math.sin(this.elevation)
+        + z * Math.cos(this.azimuth) * Math.cos(this.elevation)
+      const depthBrightness = 0.72 + 0.34 * THREE.MathUtils.clamp((towardCamera + DISK_RADIUS) / (2 * DISK_RADIUS), 0, 1)
       const speedHeat = velocities && velocities.length >= source + 3
         ? THREE.MathUtils.clamp(Math.hypot(velocities[source], velocities[source + 1], velocities[source + 2]) / 11, 0, 1)
         : innerHeat
@@ -174,7 +188,7 @@ export class SolarVisual {
         this.emberPositions[target] = x
         this.emberPositions[target + 1] = y
         this.emberPositions[target + 2] = z
-        const heat = 0.57 + 0.43 * visualHeat
+        const heat = (0.57 + 0.43 * visualHeat) * depthBrightness
         if (hash01(index + 117) < 0.22 * (1 - visualHeat) + 0.04) {
           this.emberColors[target] = heat * 0.67
           this.emberColors[target + 1] = heat * 0.25
@@ -190,7 +204,7 @@ export class SolarVisual {
         this.dustPositions[target] = x
         this.dustPositions[target + 1] = y
         this.dustPositions[target + 2] = z
-        const shade = 0.66 + hash01(index + 83) * 0.29 + innerHeat * 0.1
+        const shade = (0.66 + hash01(index + 83) * 0.29 + innerHeat * 0.1) * depthBrightness
         this.dustColors[target] = shade * (0.35 + visualHeat * 0.13)
         this.dustColors[target + 1] = shade * 0.24
         this.dustColors[target + 2] = shade * (0.72 - visualHeat * 0.19)
@@ -239,7 +253,7 @@ export class SolarVisual {
     if (this.disposed) return
     if (Number.isFinite(dx)) this.targetAzimuth -= dx * 0.006
     if (Number.isFinite(dy)) {
-      this.targetElevation = THREE.MathUtils.clamp(this.targetElevation - dy * 0.005, 0.12, 1.42)
+      this.targetElevation = THREE.MathUtils.clamp(this.targetElevation - dy * 0.005, -1.2, 1.42)
     }
   }
 
@@ -249,14 +263,14 @@ export class SolarVisual {
     const startingDistance = this.userZoomed ? this.targetDistance : Math.max(this.distance, this.fitDistance())
     this.userZoomed = true
     const minimum = this.camera.aspect < 0.7 ? 60 : 40
-    this.targetDistance = THREE.MathUtils.clamp(startingDistance * Math.exp(delta * 0.001), minimum, 220)
+    this.targetDistance = THREE.MathUtils.clamp(startingDistance * Math.exp(delta * 0.002), minimum, 220)
   }
 
   private fitDistance(): number {
     const aspect = THREE.MathUtils.clamp(this.camera.aspect || 1, 0.36, 3)
     const verticalHalfAngle = THREE.MathUtils.degToRad(this.camera.fov / 2)
     const mobileCrop = THREE.MathUtils.clamp((0.82 - aspect) / 0.38, 0, 1)
-    return (DISK_RADIUS * (1.16 - mobileCrop * 0.4)) / (Math.tan(verticalHalfAngle) * Math.min(1, aspect))
+    return (DISK_RADIUS * (1.16 - mobileCrop * 0.21)) / (Math.tan(verticalHalfAngle) * Math.min(1, aspect))
   }
 
   dispose(): void {
@@ -300,7 +314,11 @@ export class SolarVisual {
   }
 
   private addOrbitalGuides(): void {
-    for (const [radius, opacity] of [[8, 0.13], [21, 0.09], [34, 0.17]] as const) {
+    for (const [radius, opacity, tiltX, tiltZ] of [
+      [8, 0.13, 0, 0],
+      [21, 0.095, 0.34, -0.2],
+      [34, 0.16, -0.29, 0.13],
+    ] as const) {
       const count = 192
       const positions = new Float32Array(count * 3)
       for (let index = 0; index < count; index++) {
@@ -317,7 +335,9 @@ export class SolarVisual {
         opacity,
         depthWrite: false,
       }))
-      this.scene.add(new THREE.LineLoop(geometry, material))
+      const guide = new THREE.LineLoop(geometry, material)
+      guide.rotation.set(tiltX, 0, tiltZ)
+      this.scene.add(guide)
     }
   }
 
