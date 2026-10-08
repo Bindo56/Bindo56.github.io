@@ -93,7 +93,7 @@ const module: PlanetModule = {
     intro.append(
       el('span', 'eyebrow', 'PLAYABLE WORLD / UNITY DOTS PROJECT'),
       title,
-      el('p', '', 'Launch five stone belts. Change their speed and gravity. Watch thousands of bodies orbit, fall inward, or escape.'),
+      el('p', '', 'Launch five stone belts and a swarm of tiny stars. Change their speed and gravity, then watch them orbit, fall inward, or escape.'),
       el('p', 'solar-intro-note', 'Inspired by my Unity ECS and Burst solar-system simulation. This playable version runs in Three.js.'),
     )
     const start = el('button', 'primary-button', 'Start experimenting ↗')
@@ -113,7 +113,7 @@ const module: PlanetModule = {
     controls.append(
       el('span', 'eyebrow', 'EXPERIMENT 001 / CENTRAL GRAVITY'),
       el('h2', '', 'Solar DOTS'),
-      el('p', '', 'Each colored orbit carries a different stone family. Tune the launch and watch them respond.'),
+      el('p', '', 'Each colored orbit carries a stone family. Tiny stars roam between the belts. Tune the launch and watch both respond.'),
     )
     const presets = el('div', 'solar-presets')
     presets.setAttribute('role', 'group')

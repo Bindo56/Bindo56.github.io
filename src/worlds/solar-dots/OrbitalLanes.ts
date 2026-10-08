@@ -1,5 +1,8 @@
 export type StoneKind = 'ember' | 'amethyst' | 'ice' | 'iron' | 'gold'
 
+/** Free-ranging points use the same gravity simulation without a stone mesh. */
+export const FREE_STAR_LANE = 255
+
 export interface OrbitalLane {
   /** This is also the index stored in SolarSimulation.lanes. */
   readonly id: number

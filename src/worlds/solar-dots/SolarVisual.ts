@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ORBITAL_LANES, type StoneKind } from './OrbitalLanes.ts'
+import { FREE_STAR_LANE, ORBITAL_LANES, type StoneKind } from './OrbitalLanes.ts'
 
 const DISK_RADIUS = 34
 const CORE_RADIUS = 2.45
@@ -171,7 +171,7 @@ export class SolarVisual {
     this.update(0)
   }
 
-  /** Copies orbiting bodies into point batches and a small instanced stone sample. */
+  /** Renders every body as a point and adds stone meshes only to the five belts. */
   setParticles(positions: Float32Array, states: Uint8Array, count: number, velocities?: Float32Array, laneIds?: Uint8Array): void {
     if (this.disposed) return
     const length = Math.min(this.capacity, Math.max(0, Math.floor(count)), states.length, Math.floor(positions.length / 3))
@@ -187,7 +187,9 @@ export class SolarVisual {
       const y = positions[source + 1]
       const z = positions[source + 2]
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue
-      if (laneIds && index < laneIds.length) this.placeStone(index, laneIds[index], x, y, z)
+      if (laneIds && index < laneIds.length && laneIds[index] !== FREE_STAR_LANE) {
+        this.placeStone(index, laneIds[index], x, y, z)
+      }
 
       const radius = Math.hypot(x, y, z)
       const innerHeat = THREE.MathUtils.clamp(1 - (radius - 8) / 27, 0, 1)
@@ -381,7 +383,8 @@ export class SolarVisual {
 
   private addStoneBatches(): void {
     const limit = Math.min(52, Math.max(14, Math.ceil(this.capacity / 170)))
-    const selectionRate = Math.min(1, limit * ORBITAL_LANES.length / this.capacity)
+    // Half the bodies are free stars; keep the stone sample as dense as before.
+    const selectionRate = Math.min(1, limit * ORBITAL_LANES.length * 2 / this.capacity)
     for (const lane of ORBITAL_LANES) {
       const profile = stoneProfile(lane.stone)
       const geometry = this.trackGeometry(stoneGeometry(lane.stone))

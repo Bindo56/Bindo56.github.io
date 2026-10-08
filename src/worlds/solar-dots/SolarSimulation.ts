@@ -1,4 +1,4 @@
-import { ORBITAL_LANES } from './OrbitalLanes.ts'
+import { FREE_STAR_LANE, ORBITAL_LANES } from './OrbitalLanes.ts'
 
 export type SolarPreset = 'orbit' | 'plunge' | 'escape'
 
@@ -14,7 +14,7 @@ function clamp(value: number, fallback: number, minimum: number, maximum: number
   return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback
 }
 
-/** A fixed-center gravity experiment with deterministic inclined orbital planes. */
+/** A fixed-center gravity experiment with stone belts and a free-ranging star swarm. */
 export class SolarSimulation {
   readonly capacity: number
   readonly positions: Float32Array
@@ -71,11 +71,21 @@ export class SolarSimulation {
     this.lanes.fill(0)
 
     for (let body = 0; body < this.count; body++) {
-      const lane = ORBITAL_LANES[body % ORBITAL_LANES.length]
-      const radius = lane.radius + (this.random() - 0.5) * lane.width * 2
+      const freeStar = body % 2 === 0
+      const lane = ORBITAL_LANES[Math.floor(body / 2) % ORBITAL_LANES.length]
+      const radius = freeStar
+        ? 8 + 26 * Math.sqrt(this.random())
+        : lane.radius + (this.random() - 0.5) * lane.width * 2
       const phase = this.random() * Math.PI * 2
-      const node = lane.node
-      const inclination = lane.inclination
+      const node = freeStar ? this.random() * Math.PI * 2 : lane.node
+      const band = freeStar ? this.random() : 0
+      const inclination = freeStar
+        ? band < 0.25
+          ? 0.18 + this.random() * 0.24
+          : band < 0.75
+            ? 0.48 + this.random() * 0.4
+            : 1.02 + this.random() * 0.32
+        : lane.inclination
       const jitter = 0.97 + this.random() * 0.06
       const orbitalSpeed = Math.sqrt(this.gravity / radius) * this.speed * jitter
       const tangentialSpeed = preset === 'plunge'
@@ -107,7 +117,7 @@ export class SolarSimulation {
       this.velocities[offset + 1] = tangentY * tangentialSpeed + radialY * radialSpeed
       this.velocities[offset + 2] = tangentZ * tangentialSpeed + radialZ * radialSpeed
       this.states[body] = 1
-      this.lanes[body] = lane.id
+      this.lanes[body] = freeStar ? FREE_STAR_LANE : lane.id
     }
   }
 
