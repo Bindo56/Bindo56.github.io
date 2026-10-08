@@ -21,7 +21,7 @@ Keep `/worlds/event-horizon/` as the canonical URL so existing links and history
 
 ## The first minute
 
-1. **0–5 seconds — visual hook.** Show a dark purple orbital field, a bright gold center, and moving particles. One sentence explains the action: “Launch a swarm and shape its orbit.” A clear Start button leaves the source and video links visible.
+1. **0–5 seconds — visual hook.** Show a dark purple orbital field, an acid green and yellow center, and moving particles. One sentence explains the action: “Launch a swarm and shape its orbit.” A clear Start button leaves the source and video links visible.
 2. **5–20 seconds — first input.** One click or tap launches a seeded ring of bodies. The result is readable without knowing physics: bodies orbit, fall inward, or escape.
 3. **20–40 seconds — cause and effect.** Two controls change central gravity and launch speed. The next launch responds immediately; a Reset button restores the chosen preset. Show small **orbiting / captured / escaped** counters.
 4. **40–60 seconds — reason to stay or explore.** Offer another preset and an optional “keep the swarm in orbit for 10 seconds” challenge. Show a compact **How I built the original** panel with the Unity DOTS source, original video, and a route back to Projects.
@@ -33,7 +33,7 @@ No mandatory tutorial, account, leaderboard, or timed interruption. Every preset
 - **Presets:** Stable Orbit (near-circular launch), Solar Plunge (slower launch), and Escape Path (faster launch). Each changes the initial conditions, not the underlying rule. Save the selected preset in the URL query only after route and Back/Forward behavior are tested.
 - **Controls:** Start, Launch swarm, Gravity, Launch speed, Pause/Resume, Reset, and camera orbit/zoom. The first view uses safe defaults; advanced controls can sit behind a small “Experiment” disclosure.
 - **Feedback:** Color or trail length communicates speed, and a brief pulse marks capture or escape. Counters describe the browser simulation. Add a short text explanation when a preset succeeds or fails.
-- **Visual fidelity:** Recreate the video's dense orbital silhouette and gold core against a dark violet scene. Keep the site's interface light/dark toggle limited to UI panels; the simulation remains dark in both modes. Avoid expensive postprocessing until the core movement is smooth.
+- **Visual fidelity:** Recreate the video's dense orbital silhouette against a dark violet scene, with an acid green and yellow core as the current art direction. Keep the site's interface light/dark toggle limited to UI panels; the simulation remains dark in both modes. Avoid expensive postprocessing until the core movement is smooth.
 - **Portfolio evidence:** A persistent **Original Unity DOTS source** link and **Watch original demo** link sit in the world panel. A small comparison states: “Original: Unity ECS/Burst. This interactive world: Three.js.” The world must never hide the author's name, experience, Projects, or Contact access.
 
 ## Simulation model
