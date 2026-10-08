@@ -1,16 +1,26 @@
 import * as THREE from 'three'
 import { FREE_STAR_LANE, ORBITAL_LANES, type StoneKind } from './OrbitalLanes.ts'
+import { createSolarToonMaterial } from './SolarToonShader.ts'
 
 const DISK_RADIUS = 34
 const CORE_RADIUS = 2.45
 const BASE_DISTANCE = 86
 
 interface StoneBatch {
-  mesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>
+  mesh: THREE.InstancedMesh<THREE.BufferGeometry, THREE.ShaderMaterial>
+  outline: THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
   limit: number
   count: number
   selectionRate: number
   baseScale: number
+}
+
+const STONE_PALETTES: Record<StoneKind, { shadow: number; highlight: number; outline: number }> = {
+  ember: { shadow: 0x723b47, highlight: 0xffe2a4, outline: 0x2b162c },
+  amethyst: { shadow: 0x513c7e, highlight: 0xe7d4ff, outline: 0x201632 },
+  ice: { shadow: 0x2b5b87, highlight: 0xd7fbff, outline: 0x12263b },
+  iron: { shadow: 0x435063, highlight: 0xf2e7d5, outline: 0x1b2130 },
+  gold: { shadow: 0x795044, highlight: 0xffedb7, outline: 0x302030 },
 }
 
 /** Procedural solar scene. AppShell owns the renderer, resize, and frame loop. */
@@ -133,16 +143,22 @@ export class SolarVisual {
     this.outerGlow.renderOrder = 4
     this.scene.add(this.outerGlow)
 
-    this.core = new THREE.Mesh(
-      this.trackGeometry(new THREE.SphereGeometry(CORE_RADIUS, 32, 20)),
-      this.trackMaterial(new THREE.MeshPhongMaterial({
-        color: 0xffa73d,
-        emissive: 0xa1450e,
-        emissiveIntensity: 0.65,
-        specular: 0xffe9a8,
-        shininess: 58,
-      })),
+    const coreGeometry = this.trackGeometry(new THREE.SphereGeometry(CORE_RADIUS, 32, 20))
+    const coreOutline = new THREE.Mesh(
+      coreGeometry,
+      this.trackMaterial(new THREE.MeshBasicMaterial({ color: 0x461d2e, side: THREE.BackSide, toneMapped: false })),
     )
+    coreOutline.scale.setScalar(1.09)
+    coreOutline.renderOrder = 4
+    this.scene.add(coreOutline)
+    this.core = new THREE.Mesh(coreGeometry, this.trackMaterial(createSolarToonMaterial({
+      base: 0xe98231,
+      shadow: 0x92384a,
+      highlight: 0xffd574,
+      outline: 0x6a2d37,
+      glow: 0xff8f30,
+      sun: true,
+    })))
     this.core.renderOrder = 5
     this.scene.add(this.core)
     this.scene.add(new THREE.AmbientLight(0xffbd75, 0.62))
@@ -237,7 +253,11 @@ export class SolarVisual {
     markUpdated(this.emberGeometry, emberCount)
     for (const batch of this.stoneBatches) {
       batch.mesh.count = batch.count
-      if (batch.count > 0) batch.mesh.instanceMatrix.needsUpdate = true
+      batch.outline.count = batch.count
+      if (batch.count > 0) {
+        batch.mesh.instanceMatrix.needsUpdate = true
+        batch.outline.instanceMatrix.needsUpdate = true
+      }
     }
   }
 
@@ -299,7 +319,10 @@ export class SolarVisual {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const batch of this.stoneBatches) batch.mesh.dispose()
+    for (const batch of this.stoneBatches) {
+      batch.mesh.dispose()
+      batch.outline.dispose()
+    }
     this.scene.clear()
     this.geometries.forEach(geometry => geometry.dispose())
     this.materials.forEach(material => material.dispose())
@@ -385,23 +408,31 @@ export class SolarVisual {
     const limit = Math.min(52, Math.max(14, Math.ceil(this.capacity / 170)))
     // Half the bodies are free stars; keep the stone sample as dense as before.
     const selectionRate = Math.min(1, limit * ORBITAL_LANES.length * 2 / this.capacity)
+    const outlineMaterial = this.trackMaterial(new THREE.MeshBasicMaterial({
+      color: 0x1d152d,
+      side: THREE.BackSide,
+      toneMapped: false,
+    }))
     for (const lane of ORBITAL_LANES) {
-      const profile = stoneProfile(lane.stone)
+      const baseScale = stoneScale(lane.stone)
+      const palette = STONE_PALETTES[lane.stone]
       const geometry = this.trackGeometry(stoneGeometry(lane.stone))
-      const material = this.trackMaterial(new THREE.MeshStandardMaterial({
-        color: lane.color,
-        emissive: lane.color,
-        emissiveIntensity: profile.glow,
-        metalness: profile.metalness,
-        roughness: profile.roughness,
-        flatShading: true,
+      const material = this.trackMaterial(createSolarToonMaterial({
+        base: lane.color,
+        shadow: palette.shadow,
+        highlight: palette.highlight,
+        outline: palette.outline,
       }))
       const mesh = new THREE.InstancedMesh(geometry, material, limit)
+      const outline = new THREE.InstancedMesh(geometry, outlineMaterial, limit)
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      outline.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       mesh.count = 0
+      outline.count = 0
       mesh.frustumCulled = false
-      this.scene.add(mesh)
-      this.stoneBatches[lane.id] = { mesh, limit, count: 0, selectionRate, baseScale: profile.scale }
+      outline.frustumCulled = false
+      this.scene.add(outline, mesh)
+      this.stoneBatches[lane.id] = { mesh, outline, limit, count: 0, selectionRate, baseScale }
     }
   }
 
@@ -420,6 +451,9 @@ export class SolarVisual {
     transform.scale.set(size, size * (0.78 + hash01(index + 431) * 0.38), size)
     transform.updateMatrix()
     batch.mesh.setMatrixAt(batch.count, transform.matrix)
+    transform.scale.multiplyScalar(1.17)
+    transform.updateMatrix()
+    batch.outline.setMatrixAt(batch.count, transform.matrix)
     batch.count++
   }
 
@@ -483,13 +517,13 @@ function stoneGeometry(kind: StoneKind): THREE.BufferGeometry {
   }
 }
 
-function stoneProfile(kind: StoneKind): { scale: number; metalness: number; roughness: number; glow: number } {
+function stoneScale(kind: StoneKind): number {
   switch (kind) {
-    case 'ember': return { scale: 0.47, metalness: 0.08, roughness: 0.78, glow: 0.22 }
-    case 'amethyst': return { scale: 0.65, metalness: 0.25, roughness: 0.35, glow: 0.17 }
-    case 'ice': return { scale: 0.72, metalness: 0.05, roughness: 0.24, glow: 0.14 }
-    case 'iron': return { scale: 0.64, metalness: 0.55, roughness: 0.8, glow: 0.04 }
-    case 'gold': return { scale: 0.58, metalness: 0.48, roughness: 0.44, glow: 0.12 }
+    case 'ember': return 0.47
+    case 'amethyst': return 0.65
+    case 'ice': return 0.72
+    case 'iron': return 0.64
+    case 'gold': return 0.58
   }
 }
 
