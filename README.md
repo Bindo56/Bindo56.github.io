@@ -1,6 +1,6 @@
 # System Zero
 
-A playable Three.js portfolio shell for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Fly a procedural ship through open space and visit nine project-inspired planets. Each landing presents the original project and is clearly marked as a placeholder while its own game is built.
+A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Fly a procedural ship through open space and visit nine project-inspired planets. [Solar DOTS](https://bindo56.github.io/worlds/event-horizon/) is the first playable world; the other landings present the original projects while their games are built.
 
 ## Run locally
 
@@ -37,6 +37,8 @@ Run the full test command before pushing. The existing Pages workflow runs the u
 
 Touch screens show buttons for every flight action. Select a destination in the flight manifest, then use **Warp to orbit** or fly there manually.
 
+In Solar DOTS, choose Orbit, Plunge, or Escape; tune gravity and launch speed; then launch the swarm. Drag or use the arrow keys to orbit the camera, scroll to zoom, press Space to pause, and use Return to space or Escape to leave. The browser simulation is a Three.js interpretation of the [original Unity ECS and Burst project](https://github.com/Bindo56/DOTS_SolarSystem), with its [video](https://www.youtube.com/watch?v=gQo_Rgpgzwg) linked in the world.
+
 ## Routes and code
 
 - The root path is the shared space shell.
@@ -44,7 +46,7 @@ Touch screens show buttons for every flight action. Select a destination in the 
 - src/app/AppShell.ts owns the renderer, frame loop, interface theme, route transition, portfolio UI, and no-WebGL fallback. Space and landing scenes always use dark backgrounds.
 - src/app/InputActions.ts separates space, planet, and dialog input. src/app/PlanetLoader.ts keeps only one prepared landing and drops superseded loads.
 - src/space/SpacePosition.ts rebases 4,096-unit sectors. src/space/SpaceSession.ts owns the ship, chase camera, deterministic stars, and planet proxies.
-- src/worlds/registry.ts is the typed source of nine slugs, positions, appearances, project keys, and lazy imports. Every placeholder module uses the prepare → mount → update → dispose contract in src/app/PlanetContracts.ts.
+- src/worlds/registry.ts is the typed source of nine slugs, positions, appearances, project keys, and lazy imports. Every world uses the prepare → mount → update → dispose contract in src/app/PlanetContracts.ts.
 
 World-specific plans: [Solar DOTS / Event Horizon](docs/SOLAR_DOTS_BUILD_PLAN.md).
 
@@ -53,7 +55,7 @@ World-specific plans: [Solar DOTS / Event Horizon](docs/SOLAR_DOTS_BUILD_PLAN.md
 - Edit original project descriptions and links in src/data/projects.ts.
 - Edit career entries in src/data/experience.ts.
 - Edit a world's name, orbit, color, or project mapping in src/worlds/registry.ts. Keep its slug and matching worlds/<slug>/index.html path aligned.
-- Replace one placeholder module in src/worlds/ when that world's gameplay is ready. The shell and flight code need no route changes.
+- Replace a placeholder module in src/worlds/ when that world's gameplay is ready. The shell and flight code need no route changes.
 
 The Voxel original repository and demo are not public yet. Its landing intentionally says so; add the URL to the Voxel project entry when available.
 

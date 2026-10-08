@@ -128,7 +128,7 @@ export class PortfolioView {
       const actions = element('div', 'archive-actions')
       const planet = planetDefinitions.find(item => item.projectKey === project.key)
       if (planet) {
-        const world = element('a', 'archive-link primary', 'Explore ' + planet.title)
+        const world = element('a', 'archive-link primary', planet.slug === 'event-horizon' ? 'Play Solar DOTS ↗' : 'Explore ' + planet.title)
         world.href = pathForPlanet(planet)
         world.addEventListener('click', event => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return

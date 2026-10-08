@@ -55,7 +55,7 @@ export const planetDefinitions = [
   },
   {
     slug: 'event-horizon',
-    title: 'Event Horizon',
+    title: 'Solar DOTS',
     projectKey: 'dots-solar-system',
     position: { sector: [0, 0, 0], local: [-790, -50, -150] },
     radius: 56,

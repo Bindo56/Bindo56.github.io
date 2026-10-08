@@ -10,6 +10,8 @@ import { PortfolioView } from './PortfolioView.ts'
 import type { PlanetDefinition, PlanetSession, ThemeMode } from './PlanetContracts.ts'
 
 const THEME_KEY = 'system-zero-theme'
+const HOME_TITLE = 'Bindo | Game Developer & Technical Artist | System Zero'
+const SPACE_CANVAS_LABEL = 'Interactive dark space with a spaceship and nine portfolio planets. Use flight controls or the flight manifest to explore.'
 const APPROACH_RADIUS = 180
 const ENTER_RADIUS = 115
 const WORLD_TAGS: Record<string, string> = {
@@ -17,7 +19,7 @@ const WORLD_TAGS: Record<string, string> = {
   'npc-ecs': 'NPC SYSTEMS',
   'stretch-squash': 'ANIMATION',
   'drone-fleet': 'AI SIM',
-  'event-horizon': 'UNITY DOTS',
+  'event-horizon': 'PLAYABLE',
   warfront: 'MULTIPLAYER',
   bitboard: 'BITWISE MATH',
   'pixel-farm': 'SDL2 RENDERER',
@@ -28,7 +30,7 @@ const WORLD_NOTES: Record<string, string> = {
   'npc-ecs': 'ECS schedules and NPC behavior.',
   'stretch-squash': 'Procedural character animation.',
   'drone-fleet': 'VR drone flight and AI simulation.',
-  'event-horizon': 'Solar systems with Unity DOTS.',
+  'event-horizon': 'Launch swarms in a gravity lab.',
   warfront: 'Replicated multiplayer combat.',
   bitboard: 'Bitwise math in a C# training game.',
   'pixel-farm': 'Tile farming rendered with SDL2.',
@@ -89,6 +91,7 @@ export class AppShell {
   private readonly retryButton = node('button', 'secondary-button', 'Retry loading')
   private readonly flyPastButton = node('button', 'text-button', 'Continue flying')
   private readonly landing = node('article', 'landing-panel')
+  private readonly worldOverlay = node('div', 'world-overlay')
   private readonly loading = node('div', 'loading-panel')
   private readonly fallback = node('div', 'no-webgl-fallback')
   private readonly themeButton = node('button', 'theme-button')
@@ -122,12 +125,13 @@ export class AppShell {
     root.replaceChildren()
     this.stage.setAttribute('aria-label', 'Three dimensional portfolio game')
     this.fallback.hidden = true
-    this.ui.append(this.buildHeader(), this.flightUi, this.approach, this.landing, this.loading, this.fallback)
+    this.ui.append(this.buildHeader(), this.flightUi, this.approach, this.landing, this.worldOverlay, this.loading, this.fallback)
     root.append(this.stage, this.ui)
     this.buildFlightUi()
     this.buildApproach()
     this.buildLanding()
     this.buildLoading()
+    this.worldOverlay.hidden = true
     this.input = new InputActions(this.canvas, this.touchControls)
     this.portfolio = new PortfolioView(
       this.ui,
@@ -159,7 +163,7 @@ export class AppShell {
       this.renderer.toneMappingExposure = 1.28
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
       this.canvas.setAttribute('role', 'img')
-      this.canvas.setAttribute('aria-label', 'Interactive dark space with a spaceship and nine portfolio planets. Use flight controls or the flight manifest to explore.')
+      this.canvas.setAttribute('aria-label', SPACE_CANVAS_LABEL)
       this.stage.append(this.canvas)
       this.space = new SpaceSession(planetDefinitions)
       this.onResize()
@@ -232,6 +236,18 @@ export class AppShell {
       title,
       node('p', 'hero-description', 'Fly between nine worlds shaped by my work in gameplay, AI, simulation, rendering, and tools.'),
     )
+    const solarPlanet = planetDefinitions.find(planet => planet.slug === 'event-horizon')
+    if (solarPlanet) {
+      const play = node('a', 'hero-play-link primary-button', 'Play Solar DOTS ↗')
+      play.dataset.testid = 'solar-hero-play'
+      play.href = pathForPlanet(solarPlanet)
+      play.addEventListener('click', event => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+        event.preventDefault()
+        void this.navigateToWorld(solarPlanet, true)
+      })
+      hero.append(play)
+    }
     const orbitLabel = node('div', 'orbit-label')
     orbitLabel.append(node('span', 'status-dot'), node('span', '', 'SHIP READY'), node('span', 'orbit-count', '9 PROJECT WORLDS'))
     hero.append(orbitLabel)
@@ -271,7 +287,7 @@ export class AppShell {
       fly.type = 'button'
       fly.setAttribute('aria-label', 'Warp to orbit around ' + planet.title)
       fly.addEventListener('click', () => this.warpTo(planet))
-      const link = node('a', 'world-direct', 'Project ↗')
+      const link = node('a', 'world-direct', planet.slug === 'event-horizon' ? 'Play now ↗' : 'Project ↗')
       link.href = pathForPlanet(planet)
       link.setAttribute('aria-label', 'Open ' + planet.title + ' landing')
       link.addEventListener('click', event => {
@@ -509,6 +525,10 @@ export class AppShell {
 
   private async navigateToWorld(planet: PlanetDefinition, push: boolean): Promise<void> {
     if (push) history.pushState({ world: planet.slug }, '', pathForPlanet(planet))
+    document.title = planet.title + ' | Saurabh Kundalwal'
+    this.canvas.setAttribute('aria-label', planet.slug === 'event-horizon'
+      ? 'Solar DOTS gravity simulation with a gold central attractor and orbiting particles. Drag to orbit the camera and scroll to zoom.'
+      : planet.title + ' project world')
     if (!this.renderer || !this.space) {
       this.showFallback(planet)
       return
@@ -518,6 +538,8 @@ export class AppShell {
     const generation = ++this.routeGeneration
     this.planetSession?.dispose()
     this.planetSession = null
+    this.worldOverlay.replaceChildren()
+    this.worldOverlay.hidden = true
     this.activePlanet = null
     this.loadingRoute = planet
     this.approachPlanet = null
@@ -539,7 +561,12 @@ export class AppShell {
       return
     }
     try {
-      this.planetSession = ready.module.mount(ready.prepared)
+      this.planetSession = ready.module.mount(ready.prepared, {
+        canvas: this.canvas,
+        uiRoot: this.worldOverlay,
+        onExit: () => this.exitToSpace(true),
+        isInteractive: () => this.input.context === 'planet' && !this.portfolio.isOpen && !this.media.isOpen,
+      })
       this.activePlanet = planet
       this.loadingRoute = null
       this.loading.hidden = true
@@ -548,12 +575,19 @@ export class AppShell {
       this.onResize()
     } catch (error) {
       ready.prepared.dispose()
+      this.worldOverlay.replaceChildren()
+      this.worldOverlay.hidden = true
       console.error('Planet mount failed', error)
       this.renderLoading('LANDING UNAVAILABLE', planet.title, 'The world could not start. Return to space and try again.')
     }
   }
 
   private showLanding(planet: PlanetDefinition): void {
+    if (planet.slug === 'event-horizon') {
+      this.landing.hidden = true
+      this.worldOverlay.hidden = false
+      return
+    }
     const project = projects.find(item => item.key === planet.projectKey)
     this.landing.replaceChildren()
     const eyebrow = node('span', 'eyebrow', 'WORLD  /  ' + planet.slug.toUpperCase())
@@ -609,10 +643,14 @@ export class AppShell {
 
   private exitToSpace(push: boolean): void {
     if (push) history.pushState({}, '', homePath())
+    document.title = HOME_TITLE
+    this.canvas.setAttribute('aria-label', SPACE_CANVAS_LABEL)
     this.routeGeneration++
     const previous = this.activePlanet ?? this.loadingRoute
     this.planetSession?.dispose()
     this.planetSession = null
+    this.worldOverlay.replaceChildren()
+    this.worldOverlay.hidden = true
     this.activePlanet = null
     this.loadingRoute = null
     this.loader.clear()
@@ -660,6 +698,7 @@ export class AppShell {
   private showFallback(planet?: PlanetDefinition): void {
     this.flightUi.hidden = true
     this.landing.hidden = true
+    this.worldOverlay.hidden = true
     this.loading.hidden = true
     this.fallback.dataset.testid = 'no-webgl-fallback'
     this.fallback.hidden = false

@@ -26,7 +26,15 @@ export interface PlanetSession {
   dispose(): void
 }
 
+/** Scoped browser affordances for an interactive world; the shell retains route and renderer ownership. */
+export interface PlanetHost {
+  canvas: HTMLCanvasElement
+  uiRoot: HTMLElement
+  onExit(): void
+  isInteractive(): boolean
+}
+
 export interface PlanetModule {
   prepare(definition: PlanetDefinition, signal: AbortSignal): Promise<PreparedPlanet>
-  mount(prepared: PreparedPlanet): PlanetSession
+  mount(prepared: PreparedPlanet, host: PlanetHost): PlanetSession
 }
