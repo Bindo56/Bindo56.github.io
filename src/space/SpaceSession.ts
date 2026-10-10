@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { PlanetDefinition } from '../app/PlanetContracts.ts'
 import { ShipController, type ShipActions } from './ShipController.ts'
+import { createSpaceToonMaterial, planetToonPalette } from './SpaceToonShader.ts'
 import {
   differenceSpacePosition,
   distanceBetweenSpacePositions,
@@ -18,8 +19,6 @@ interface PlanetProxy {
   definition: PlanetDefinition
   group: THREE.Group
   radius: number
-  body: THREE.Mesh
-  atmosphere: THREE.Mesh
 }
 
 /** Space rendering and flight, with no renderer, DOM, or input listener of its own. */
@@ -33,21 +32,22 @@ export class SpaceSession {
   private readonly planets: PlanetProxy[] = []
   private readonly starDome: THREE.Points
   private readonly nearbyStars: THREE.Points
-  private readonly ambient = new THREE.HemisphereLight(0x94bce8, 0x14203d, 1.15)
-  private readonly sun = new THREE.DirectionalLight(0xffe9cb, 2.4)
-  private readonly shipHull = new THREE.MeshStandardMaterial({
-    color: 0xd6e9f6,
-    metalness: 0.62,
-    roughness: 0.28,
-    flatShading: true,
+  private readonly outlineMaterial = new THREE.MeshBasicMaterial({
+    color: 0x020715,
+    side: THREE.BackSide,
+    toneMapped: false,
   })
-  private readonly canopy = new THREE.MeshPhysicalMaterial({
-    color: 0x45d7ed,
-    metalness: 0.35,
-    roughness: 0.16,
-    transparent: true,
-    opacity: 0.87,
-    clearcoat: 1,
+  private readonly shipHull = createSpaceToonMaterial({
+    base: 0xc9e0ef,
+    shadow: 0x294961,
+    highlight: 0xf5fdff,
+    outline: 0x020715,
+  })
+  private readonly canopy = createSpaceToonMaterial({
+    base: 0x287ba5,
+    shadow: 0x0b3557,
+    highlight: 0xb3f3ff,
+    outline: 0x020715,
   })
   private readonly engineMaterial = new THREE.MeshBasicMaterial({ color: 0x6cecff })
   private readonly desiredCamera = new THREE.Vector3()
@@ -63,8 +63,6 @@ export class SpaceSession {
 
   constructor(definitions: readonly PlanetDefinition[]) {
     this.scene.background = new THREE.Color(0x020917)
-    this.sun.position.set(-100, 150, -200)
-    this.scene.add(this.ambient, this.sun)
 
     this.ship = this.createShip()
     this.scene.add(this.ship)
@@ -77,7 +75,7 @@ export class SpaceSession {
     this.scene.add(this.starDome, this.nearbyStars)
 
     definitions.forEach((definition, index) => {
-      const proxy = createPlanetProxy(definition, index)
+      const proxy = createPlanetProxy(definition, index, this.outlineMaterial)
       this.planets.push(proxy)
       this.scene.add(proxy.group)
     })
@@ -197,8 +195,6 @@ export class SpaceSession {
       proxy.group.rotation.y += dt * 0.08
       proxy.group.visible = Number.isFinite(distance)
 
-      const bodyMaterial = proxy.body.material as THREE.MeshStandardMaterial
-      bodyMaterial.emissiveIntensity = 0.12 + (1 - marker) * 0.04
     }
   }
 
@@ -223,35 +219,46 @@ export class SpaceSession {
 
   private createShip(): THREE.Group {
     const ship = new THREE.Group()
-    const accent = new THREE.MeshStandardMaterial({
-      color: 0x43c9ef,
-      metalness: 0.5,
-      roughness: 0.28,
-      emissive: 0x0a6787,
-      emissiveIntensity: 0.3,
+    const accent = createSpaceToonMaterial({
+      base: 0x25b9dc,
+      shadow: 0x0a5872,
+      highlight: 0xb9f6ff,
+      outline: 0x020715,
     })
-    const darkMetal = new THREE.MeshStandardMaterial({ color: 0x172b43, metalness: 0.68, roughness: 0.33 })
+    const darkMetal = createSpaceToonMaterial({
+      base: 0x385773,
+      shadow: 0x091a2e,
+      highlight: 0x7e9fbd,
+      outline: 0x020715,
+    })
 
     const fuselage = new THREE.Mesh(new THREE.ConeGeometry(0.72, 4.7, 6), this.shipHull)
     fuselage.geometry.rotateX(-Math.PI / 2)
+    addBackfaceOutline(fuselage, this.outlineMaterial, 0.065)
     ship.add(fuselage)
 
     const centralCore = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.67, 2.3, 8), this.shipHull)
     centralCore.rotation.x = Math.PI / 2
     centralCore.position.z = 1.0
+    addBackfaceOutline(centralCore, this.outlineMaterial, 0.055)
     ship.add(centralCore)
 
     const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.78, 18, 12), this.canopy)
     canopy.scale.set(0.72, 0.42, 1.28)
     canopy.position.set(0, 0.4, -0.55)
+    addBackfaceOutline(canopy, this.outlineMaterial, 0.06)
     ship.add(canopy)
 
-    ship.add(createWing(-1, this.shipHull, accent), createWing(1, this.shipHull, accent))
+    ship.add(
+      createWing(-1, this.shipHull, accent, this.outlineMaterial),
+      createWing(1, this.shipHull, accent, this.outlineMaterial),
+    )
 
     for (const side of [-1, 1]) {
       const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.15, 10), darkMetal)
       pod.rotation.x = Math.PI / 2
       pod.position.set(side * 0.55, -0.12, 1.92)
+      addBackfaceOutline(pod, this.outlineMaterial, 0.075)
       ship.add(pod)
 
       const glow = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 8), this.engineMaterial)
@@ -264,20 +271,34 @@ export class SpaceSession {
     const fin = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.92, 3), accent)
     fin.position.set(0, 0.48, 1.5)
     fin.rotation.z = Math.PI / 2
+    addBackfaceOutline(fin, this.outlineMaterial, 0.08)
     ship.add(fin)
     return ship
   }
 }
 
-function createWing(side: number, hull: THREE.Material, accent: THREE.Material): THREE.Group {
+function addBackfaceOutline(mesh: THREE.Mesh, material: THREE.Material, width: number): void {
+  const outline = new THREE.Mesh(mesh.geometry, material)
+  outline.name = 'Ink outline'
+  outline.scale.setScalar(1 + width)
+  outline.renderOrder = -1
+  mesh.add(outline)
+}
+
+function createWing(
+  side: number,
+  hull: THREE.ShaderMaterial,
+  accent: THREE.ShaderMaterial,
+  outlineMaterial: THREE.Material,
+): THREE.Group {
   const group = new THREE.Group()
+  const leadingRoot = new THREE.Vector3(side * 0.47, 0, -1.05)
+  const tip = new THREE.Vector3(side * 3.0, -0.06, 1.35)
+  const trailingRoot = new THREE.Vector3(side * 0.48, 0, 1.65)
   const vertices = new Float32Array([
-    side * 0.47, 0, -1.05,
-    side * 3.0, -0.06, 1.35,
-    side * 0.48, 0, 1.65,
-    side * 0.47, 0, -1.05,
-    side * 0.48, 0, 1.65,
-    side * 3.0, -0.06, 1.35,
+    ...leadingRoot.toArray(),
+    ...tip.toArray(),
+    ...trailingRoot.toArray(),
   ])
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
@@ -286,9 +307,18 @@ function createWing(side: number, hull: THREE.Material, accent: THREE.Material):
   wingMaterial.side = THREE.DoubleSide
   group.add(new THREE.Mesh(geometry, wingMaterial))
 
+  // A line follows the flat wing silhouette where a backface shell cannot.
+  const perimeter = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints([leadingRoot, tip, trailingRoot]),
+    new THREE.LineBasicMaterial({ color: 0x020715, toneMapped: false }),
+  )
+  perimeter.renderOrder = 1
+  group.add(perimeter)
+
   const trim = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.045, 0.08), accent)
   trim.rotation.y = side * 0.5
   trim.position.set(side * 1.75, 0.04, 1.22)
+  addBackfaceOutline(trim, outlineMaterial, 0.15)
   group.add(trim)
   return group
 }
@@ -337,7 +367,11 @@ function buildNearbyStarGeometry(center: readonly number[]): THREE.BufferGeometr
   return geometry
 }
 
-function createPlanetProxy(definition: PlanetDefinition, index: number): PlanetProxy {
+function createPlanetProxy(
+  definition: PlanetDefinition,
+  index: number,
+  outlineMaterial: THREE.Material,
+): PlanetProxy {
   const group = new THREE.Group()
   const radius = Math.max(12, Math.min(55, definition.radius))
   const isVoxel = definition.slug === 'voxel'
@@ -346,15 +380,11 @@ function createPlanetProxy(definition: PlanetDefinition, index: number): PlanetP
   const geometry = isVoxel
     ? new THREE.IcosahedronGeometry(radius, 1)
     : new THREE.SphereGeometry(radius, isBitboard ? 12 : 24, isBitboard ? 8 : 16)
-  const bodyMaterial = new THREE.MeshStandardMaterial({
-    color: isBlackHole ? 0x090b18 : definition.color,
-    emissive: definition.color,
-    emissiveIntensity: 0.15,
-    roughness: isBlackHole ? 1 : 0.65,
-    metalness: definition.slug === 'material-forge' ? 0.67 : 0.12,
-    flatShading: isVoxel || isBitboard,
-  })
+  const bodyMaterial = createSpaceToonMaterial(isBlackHole
+    ? { base: 0x46375e, shadow: 0x0a1025, highlight: 0xa78bfa, outline: 0x020715 }
+    : planetToonPalette(definition.color))
   const body = new THREE.Mesh(geometry, bodyMaterial)
+  addBackfaceOutline(body, outlineMaterial, 0.045)
   group.add(body)
 
   const atmosphere = new THREE.Mesh(
@@ -364,14 +394,16 @@ function createPlanetProxy(definition: PlanetDefinition, index: number): PlanetP
   group.add(atmosphere)
 
   if (isVoxel) {
+    const fragmentMaterial = createSpaceToonMaterial(planetToonPalette(definition.color))
     for (let i = 0; i < 7; i++) {
       const cube = new THREE.Mesh(
         new THREE.BoxGeometry(radius * 0.21, radius * 0.21, radius * 0.21),
-        new THREE.MeshStandardMaterial({ color: definition.color, emissive: definition.color, emissiveIntensity: 0.2, flatShading: true }),
+        fragmentMaterial,
       )
       const angle = (i / 7) * Math.PI * 2
       cube.position.set(Math.cos(angle) * radius * 1.18, Math.sin(i * 2.2) * radius * 0.36, Math.sin(angle) * radius * 1.18)
       cube.rotation.set(i * 0.3, i * 0.7, i * 0.2)
+      addBackfaceOutline(cube, outlineMaterial, 0.09)
       group.add(cube)
     }
   }
@@ -393,7 +425,7 @@ function createPlanetProxy(definition: PlanetDefinition, index: number): PlanetP
     group.add(grid)
   }
 
-  return { definition, group, radius, body, atmosphere }
+  return { definition, group, radius }
 }
 
 function hashCell(x: number, y: number, z: number): number {
