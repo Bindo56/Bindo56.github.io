@@ -20,13 +20,6 @@ export class BlackHoleVisual {
   constructor() {
     this.group.name = 'Gargantua-inspired black hole'
 
-    const horizon = new THREE.Mesh(
-      this.geometry(new THREE.SphereGeometry(SHADOW_RADIUS, 48, 32)),
-      this.material(new THREE.MeshBasicMaterial({ color: 0x000103, toneMapped: false })),
-    )
-    horizon.name = 'Unlit event horizon'
-    this.group.add(horizon)
-
     const halo = new THREE.Mesh(
       this.geometry(new THREE.RingGeometry(3.1, 10.6, 160, 2).rotateX(-Math.PI / 2)),
       this.material(new THREE.MeshBasicMaterial({
@@ -90,10 +83,9 @@ export class BlackHoleVisual {
     disk.renderOrder = 5
     this.group.add(disk)
 
-    // The transparent camera-facing mask is rendered after the disk so the
-    // silhouette stays completely black at every orbit-camera angle.
+    // A camera-facing upper semicircle leaves the space below the disk open.
     this.shadowMask = new THREE.Mesh(
-      this.geometry(new THREE.CircleGeometry(SHADOW_RADIUS * 1.025, 64)),
+      this.geometry(new THREE.CircleGeometry(SHADOW_RADIUS * 1.025, 64, 0, Math.PI)),
       this.material(new THREE.MeshBasicMaterial({
         color: 0x000103,
         transparent: true,
@@ -103,12 +95,12 @@ export class BlackHoleVisual {
         toneMapped: false,
       })),
     )
-    this.shadowMask.name = 'Black lensing shadow'
+    this.shadowMask.name = 'Upper black-hole shadow'
     this.shadowMask.renderOrder = 8
     this.group.add(this.shadowMask)
 
     this.lensMaterial = this.material(new THREE.ShaderMaterial({
-      name: 'Lensed accretion images',
+      name: 'Upper lensed accretion arc',
       uniforms: {
         uTime: { value: 0 },
         uEdgeOn: { value: 1 },
@@ -126,23 +118,23 @@ export class BlackHoleVisual {
         varying vec2 vUv;
         void main() {
           vec2 p = (vUv - 0.5) * 15.0;
+          // Keep a single illuminated half-circle above the disk.
+          if (p.y <= 0.0) discard;
           float radius = length(p);
           float xFraction = abs(p.x) / 6.55;
           float arch = sqrt(max(0.0, 1.0 - xFraction * xFraction));
           float ends = 1.0 - smoothstep(0.88, 1.0, xFraction);
           float topY = 3.78 * arch + 0.04;
-          float bottomY = -3.05 * arch - 0.03;
           float upper = exp(-pow((p.y - topY) / 0.25, 2.0)) * ends;
-          float lower = exp(-pow((p.y - bottomY) / 0.16, 2.0)) * ends;
           float innerImage = exp(-pow((radius - 2.79) / 0.085, 2.0));
           float warmFlow = 0.79 + 0.21 * sin(p.x * 14.0 + uTime * 0.36);
           float arcStrength = smoothstep(0.12, 0.42, uEdgeOn);
-          float arcs = (upper * 0.84 + lower * 0.47) * warmFlow * arcStrength;
+          float arc = upper * 0.84 * warmFlow * arcStrength;
           float faintRing = innerImage * 0.28;
           float veil = exp(-pow((radius - 3.15) / 0.72, 2.0)) * 0.055;
           float flare = exp(-abs(p.y) / 0.09)
             * (1.0 - smoothstep(3.0, 7.2, abs(p.x))) * 0.065;
-          float intensity = (arcs + faintRing + veil + flare)
+          float intensity = (arc + faintRing + veil + flare)
             * smoothstep(2.56, 2.64, radius);
           if (intensity < 0.004) discard;
           vec3 amber = vec3(0.9, 0.36, 0.10);
@@ -161,7 +153,7 @@ export class BlackHoleVisual {
       toneMapped: true,
     }))
     this.lens = new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(15, 15)), this.lensMaterial)
-    this.lens.name = 'Upper and lower lensed disk images'
+    this.lens.name = 'Upper lensed disk half-circle'
     this.lens.renderOrder = 9
     this.group.add(this.lens)
   }

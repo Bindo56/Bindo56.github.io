@@ -273,26 +273,22 @@ function gravityMotif(radius: number): MotifParts {
     animate: () => undefined,
   }
 
-  // Keep the event horizon truly black. The disk sits on a tilted plane, so its
-  // far half disappears behind the sphere while the near half crosses in front.
-  const darkCore = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 0.84, 32, 20),
-    new THREE.MeshBasicMaterial({ color: 0x01030a, toneMapped: false }),
-  )
-  darkCore.frustumCulled = false
-  parts.group.add(darkCore)
-
-  // A facing frame makes the silhouette legible from every flight direction.
-  // The disk still has real depth inside that frame and is occluded by the core.
+  // Face the dark upper semicircle and light arc toward the ship camera.
   const facing = new THREE.Group()
   parts.group.add(facing)
+  const darkCore = new THREE.Mesh(
+    new THREE.CircleGeometry(radius * 0.84, 48, 0, Math.PI),
+    new THREE.MeshBasicMaterial({ color: 0x01030a, side: THREE.DoubleSide, toneMapped: false }),
+  )
+  darkCore.frustumCulled = false
+  facing.add(darkCore)
   darkCore.onBeforeRender = (_renderer, _scene, camera) => {
     facing.quaternion.copy(camera.quaternion)
     facing.updateMatrixWorld(true)
   }
 
   const accretion = new THREE.Group()
-  accretion.rotation.x = -1.2
+  accretion.rotation.x = -1.4
   facing.add(accretion)
 
   const diskGeometry = new THREE.RingGeometry(radius * 0.9, radius * 2.15, 128, 8)
@@ -350,44 +346,40 @@ function gravityMotif(radius: number): MotifParts {
   }
   accretion.add(streamers)
 
-  // The two lifted arcs suggest light bent above and below the horizon. Their
-  // broad translucent underlay supplies a soft glow without a postprocess pass.
-  for (const upper of [true, false]) {
-    const sign = upper ? 1 : -1
-    const curve = new THREE.CubicBezierCurve3(
-      new THREE.Vector3(-radius * 1.58, sign * radius * 0.16, radius * 0.16),
-      new THREE.Vector3(-radius * 0.94, sign * radius * 1.48, radius * 0.16),
-      new THREE.Vector3(radius * 0.94, sign * radius * 1.48, radius * 0.16),
-      new THREE.Vector3(radius * 1.58, sign * radius * 0.16, radius * 0.16),
-    )
-    const arcGeometry = new THREE.TubeGeometry(curve, 64, radius * (upper ? 0.045 : 0.035), 6, false)
-    const glow = new THREE.Mesh(
-      new THREE.TubeGeometry(curve, 64, radius * 0.12, 6, false),
-      new THREE.MeshBasicMaterial({
-        color: upper ? 0xffaa60 : 0xff7848,
-        transparent: true,
-        opacity: 0.19,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      }),
-    )
-    const arc = new THREE.Mesh(
-      arcGeometry,
-      new THREE.MeshBasicMaterial({
-        color: upper ? 0xffe1a0 : 0xffa260,
-        transparent: true,
-        opacity: upper ? 0.86 : 0.66,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false,
-      }),
-    )
-    facing.add(glow, arc)
-  }
+  // Only the upper lensed half-circle rises above the horizon. Its translucent
+  // underlay supplies a soft glow without a postprocess pass.
+  const upperCurve = new THREE.CubicBezierCurve3(
+    new THREE.Vector3(-radius * 1.58, radius * 0.16, radius * 0.16),
+    new THREE.Vector3(-radius * 0.94, radius * 1.48, radius * 0.16),
+    new THREE.Vector3(radius * 0.94, radius * 1.48, radius * 0.16),
+    new THREE.Vector3(radius * 1.58, radius * 0.16, radius * 0.16),
+  )
+  const upperGlow = new THREE.Mesh(
+    new THREE.TubeGeometry(upperCurve, 64, radius * 0.12, 6, false),
+    new THREE.MeshBasicMaterial({
+      color: 0xffaa60,
+      transparent: true,
+      opacity: 0.19,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+  )
+  const upperArc = new THREE.Mesh(
+    new THREE.TubeGeometry(upperCurve, 64, radius * 0.045, 6, false),
+    new THREE.MeshBasicMaterial({
+      color: 0xffe1a0,
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+  )
+  facing.add(upperGlow, upperArc)
 
   const photonGlow = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.9, radius * 0.105, 8, 96),
+    new THREE.TorusGeometry(radius * 0.9, radius * 0.105, 8, 96, Math.PI),
     new THREE.MeshBasicMaterial({
       color: 0xff8b4e,
       transparent: true,
@@ -398,7 +390,7 @@ function gravityMotif(radius: number): MotifParts {
     }),
   )
   const photonRing = new THREE.Mesh(
-    new THREE.TorusGeometry(radius * 0.9, radius * 0.025, 6, 96),
+    new THREE.TorusGeometry(radius * 0.9, radius * 0.025, 6, 96, Math.PI),
     new THREE.MeshBasicMaterial({
       color: 0xffcd82,
       transparent: true,

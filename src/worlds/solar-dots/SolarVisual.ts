@@ -261,6 +261,7 @@ export class SolarVisual {
     if (this.disposed) return
     this.userZoomed = true
     this.focusedOnBlackHole = true
+    this.targetElevation = 0.12
     this.targetDistance = 34
   }
 
@@ -268,6 +269,7 @@ export class SolarVisual {
     if (this.disposed) return
     this.userZoomed = false
     this.focusedOnBlackHole = false
+    this.targetElevation = 0.23
     this.targetDistance = BASE_DISTANCE
   }
 

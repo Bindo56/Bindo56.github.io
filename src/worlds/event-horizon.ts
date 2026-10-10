@@ -219,7 +219,7 @@ const module: PlanetModule = {
       el('summary', '', 'How the original works'),
       el('p', '', 'The Unity version updates many entities with ECS systems and Burst jobs. Each body accelerates toward a fixed center, then exits the simulation at an inner or outer boundary.'),
       el('p', '', 'This browser version recreates that central-gravity experiment with typed arrays and batched Three.js particles.'),
-      el('p', '', 'The glowing disk and bent light are procedural artwork inspired by cinematic black holes, not a relativistic ray-tracing simulation.'),
+      el('p', '', 'The glowing disk and upper light arc are procedural artwork inspired by cinematic black holes, not a relativistic ray-tracing simulation.'),
     )
     controls.append(presets, sliders, actions, status, stats, laneLegend, controlsLinks, proof, buildNotes)
 
