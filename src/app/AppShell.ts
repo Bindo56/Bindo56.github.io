@@ -5,6 +5,7 @@ import { SpaceSession } from '../space/SpaceSession.ts'
 import { differenceSpacePosition } from '../space/SpacePosition.ts'
 import { MediaPopup } from '../ui/MediaPopup.ts'
 import { SystemMap } from '../ui/SystemMap.ts'
+import { BitroomPortalTransition } from '../worlds/BitroomPortalTransition.ts'
 import { parseRoute, pathForPlanet, planetDefinitions } from '../worlds/registry.ts'
 import { InputActions } from './InputActions.ts'
 import { PlanetLoader, type LoadState } from './PlanetLoader.ts'
@@ -96,6 +97,7 @@ export class AppShell {
   private readonly worldOverlay = node('div', 'world-overlay')
   private readonly loading = node('div', 'loading-panel')
   private readonly fallback = node('div', 'no-webgl-fallback')
+  private readonly bitroomPortal = new BitroomPortalTransition()
   private readonly themeButton = node('button', 'theme-button')
   private readonly themeChoice = node('span', 'theme-choice')
   private readonly worldMapButton = node('button', 'nav-button world-map-button', 'System map')
@@ -140,7 +142,7 @@ export class AppShell {
     root.replaceChildren()
     this.stage.setAttribute('aria-label', 'Three dimensional portfolio game')
     this.fallback.hidden = true
-    this.ui.append(this.buildHeader(), this.flightUi, this.systemMap.element, this.approach, this.landing, this.worldOverlay, this.loading, this.fallback)
+    this.ui.append(this.buildHeader(), this.flightUi, this.systemMap.element, this.approach, this.landing, this.worldOverlay, this.loading, this.fallback, this.bitroomPortal.element)
     root.append(this.stage, this.ui)
     this.buildFlightUi()
     this.buildApproach()
@@ -206,6 +208,7 @@ export class AppShell {
     this.worldMapButton.removeEventListener('click', this.showWorldMap)
     this.flyPastButton.removeEventListener('click', this.flyPast)
     this.loader.dispose()
+    this.bitroomPortal.dispose()
     this.planetSession?.dispose()
     this.space?.dispose()
     this.media.dispose()
@@ -472,6 +475,10 @@ export class AppShell {
 
   private handleKeys(): void {
     if (this.media.isOpen) return
+    if (this.loadingRoute) {
+      if (this.input.consume('Escape') || this.input.consume('Backspace')) this.exitToSpace(true)
+      return
+    }
     if (this.input.consume('KeyT')) this.toggleTheme()
     if (this.input.consume('KeyO')) this.showWorldMap()
     if (this.input.consume('KeyM')) {
@@ -605,6 +612,7 @@ export class AppShell {
     }
     if (this.activePlanet?.slug === planet.slug && this.planetSession) return
 
+    this.bitroomPortal.cancel()
     const generation = ++this.routeGeneration
     this.planetSession?.dispose()
     this.planetSession = null
@@ -622,7 +630,10 @@ export class AppShell {
     this.renderLoading('PREPARING LANDING', planet.title, 'Preparing world…')
     this.space.hold(true)
     this.input.setContext('dialog')
-    await this.loader.prefetch(planet)
+    const portal = planet.slug === 'bitboard'
+      ? this.bitroomPortal.play(this.motionPreference.matches)
+      : Promise.resolve()
+    await Promise.all([this.loader.prefetch(planet), portal])
     if (generation !== this.routeGeneration || this.disposed) return
 
     const ready = this.loader.takeReady(planet)
@@ -713,6 +724,7 @@ export class AppShell {
 
   private exitToSpace(push: boolean): void {
     this.closeSystemMap()
+    this.bitroomPortal.cancel()
     if (push) history.pushState({}, '', homePath())
     document.title = HOME_TITLE
     this.canvas.setAttribute('aria-label', SPACE_CANVAS_LABEL)
