@@ -92,7 +92,7 @@ export class SpaceSession {
     )
     this.scene.add(this.starDome, this.nearbyStars)
 
-    this.blackHole = new BlackHoleVisual()
+    this.blackHole = new BlackHoleVisual({ faceCamera: false })
     // The glow ends within the first orbit (260 units), leaving a visible gap.
     this.blackHole.group.scale.setScalar(18)
     this.scene.add(this.blackHole.group)

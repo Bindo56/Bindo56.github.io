@@ -17,10 +17,12 @@ export class BlackHoleVisual {
   private readonly cameraPosition = new THREE.Vector3()
   private readonly worldPosition = new THREE.Vector3()
   private readonly cameraRotation = new THREE.Quaternion()
+  private readonly faceCamera: boolean
   private readonly geometries: THREE.BufferGeometry[] = []
   private readonly materials: THREE.Material[] = []
 
-  constructor() {
+  constructor(options: { faceCamera?: boolean } = {}) {
+    this.faceCamera = options.faceCamera ?? true
     this.group.name = 'Gargantua-inspired black hole'
 
     const halo = new THREE.Mesh(
@@ -95,6 +97,7 @@ export class BlackHoleVisual {
         opacity: 1,
         depthTest: true,
         depthWrite: false,
+        side: THREE.DoubleSide,
         toneMapped: false,
       })),
     )
@@ -169,10 +172,14 @@ export class BlackHoleVisual {
     this.cameraDirection.copy(this.cameraPosition).sub(this.worldPosition)
     if (this.cameraDirection.lengthSq() > 0) this.cameraDirection.normalize()
     else this.cameraDirection.set(0, 0, 1)
-    this.lensMaterial.uniforms.uEdgeOn.value = 1 - Math.abs(this.cameraDirection.y)
-    camera.getWorldQuaternion(this.cameraRotation)
-    this.shadowMask.quaternion.copy(this.cameraRotation)
-    this.lens.quaternion.copy(this.cameraRotation)
+    this.lensMaterial.uniforms.uEdgeOn.value = this.faceCamera
+      ? 1 - Math.abs(this.cameraDirection.y)
+      : Math.abs(this.cameraDirection.z)
+    if (this.faceCamera) {
+      camera.getWorldQuaternion(this.cameraRotation)
+      this.shadowMask.quaternion.copy(this.cameraRotation)
+      this.lens.quaternion.copy(this.cameraRotation)
+    }
   }
 
   dispose(): void {

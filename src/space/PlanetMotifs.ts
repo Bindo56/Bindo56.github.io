@@ -273,23 +273,18 @@ function gravityMotif(radius: number): MotifParts {
     animate: () => undefined,
   }
 
-  // Face the dark upper semicircle and light arc toward the ship camera.
-  const facing = new THREE.Group()
-  parts.group.add(facing)
+  // Keep the horizon and its light arc fixed in world space as the ship flies past.
+  const horizon = new THREE.Group()
+  parts.group.add(horizon)
   const darkCore = new THREE.Mesh(
     new THREE.CircleGeometry(radius * 0.84, 48, 0, Math.PI),
     new THREE.MeshBasicMaterial({ color: 0x01030a, side: THREE.DoubleSide, toneMapped: false }),
   )
-  darkCore.frustumCulled = false
-  facing.add(darkCore)
-  darkCore.onBeforeRender = (_renderer, _scene, camera) => {
-    facing.quaternion.copy(camera.quaternion)
-    facing.updateMatrixWorld(true)
-  }
+  horizon.add(darkCore)
 
   const accretion = new THREE.Group()
   accretion.rotation.x = -1.4
-  facing.add(accretion)
+  horizon.add(accretion)
 
   const diskGeometry = new THREE.RingGeometry(radius * 0.9, radius * 2.15, 128, 8)
   const positions = diskGeometry.getAttribute('position')
@@ -376,7 +371,7 @@ function gravityMotif(radius: number): MotifParts {
       toneMapped: false,
     }),
   )
-  facing.add(upperGlow, upperArc)
+  horizon.add(upperGlow, upperArc)
 
   const photonGlow = new THREE.Mesh(
     new THREE.TorusGeometry(radius * 0.9, radius * 0.105, 8, 96, Math.PI),
@@ -402,11 +397,7 @@ function gravityMotif(radius: number): MotifParts {
   )
   photonGlow.position.z = radius * 0.08
   photonRing.position.z = radius * 0.09
-  facing.add(photonGlow, photonRing)
-  facing.traverse(object => {
-    // The facing transform is refreshed at draw time, after frustum collection.
-    if (object instanceof THREE.Mesh) object.frustumCulled = false
-  })
+  horizon.add(photonGlow, photonRing)
 
   const stones = new THREE.Group()
   const rockGeometry = new THREE.IcosahedronGeometry(radius * 0.045, 0)
