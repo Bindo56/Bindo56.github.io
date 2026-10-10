@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import type { PlanetDefinition } from '../app/PlanetContracts.ts'
 import { ShipController, type ShipActions } from './ShipController.ts'
-import { createSpaceToonMaterial, planetToonPalette } from './SpaceToonShader.ts'
+import { createSpaceToonMaterial } from './SpaceToonShader.ts'
+import { OrbitSystem } from './OrbitSystem.ts'
+import { createPlanetMotif, type PlanetMotif } from './PlanetMotifs.ts'
 import {
   differenceSpacePosition,
   distanceBetweenSpacePositions,
@@ -12,13 +14,21 @@ import {
 const FIXED_STEP = 1 / 60
 const STAR_CELL_SIZE = 512
 const STARS_PER_CELL = 15
-const PLANET_FULL_DISTANCE = 1200
-const PLANET_MARKER_DISTANCE = 1900
+const PLANET_FULL_DISTANCE = 900
+const PLANET_MARKER_DISTANCE = 1700
+const NEAR_DETAIL_DISTANCE = 420
+const MID_DETAIL_DISTANCE = 1050
+const ORBIT_TRACK_RANGE = 680
 
 interface PlanetProxy {
   definition: PlanetDefinition
-  group: THREE.Group
+  motif: PlanetMotif
   radius: number
+}
+
+interface OrbitTrack {
+  definition: PlanetDefinition
+  line: THREE.LineLoop
 }
 
 /** Space rendering and flight, with no renderer, DOM, or input listener of its own. */
@@ -27,9 +37,12 @@ export class SpaceSession {
   readonly camera = new THREE.PerspectiveCamera(68, 1, 0.1, 2800)
 
   private readonly controller = new ShipController()
+  private readonly orbits: OrbitSystem
   private readonly ship: THREE.Group
   private readonly thrusterGlows: THREE.Mesh[] = []
   private readonly planets: PlanetProxy[] = []
+  private readonly orbitTracks: OrbitTrack[] = []
+  private readonly systemStar: THREE.Group
   private readonly starDome: THREE.Points
   private readonly nearbyStars: THREE.Points
   private readonly outlineMaterial = new THREE.MeshBasicMaterial({
@@ -60,9 +73,13 @@ export class SpaceSession {
   private accumulator = 0
   private elapsed = 0
   private held = false
+  private reducedMotion = false
+  private selectedPlanet: PlanetDefinition | null = null
+  private coMovingPlanet: PlanetDefinition | null = null
 
   constructor(definitions: readonly PlanetDefinition[]) {
     this.scene.background = new THREE.Color(0x020917)
+    this.orbits = new OrbitSystem(definitions)
 
     this.ship = this.createShip()
     this.scene.add(this.ship)
@@ -74,10 +91,16 @@ export class SpaceSession {
     )
     this.scene.add(this.starDome, this.nearbyStars)
 
-    definitions.forEach((definition, index) => {
-      const proxy = createPlanetProxy(definition, index, this.outlineMaterial)
-      this.planets.push(proxy)
-      this.scene.add(proxy.group)
+    this.systemStar = createSystemStar(this.outlineMaterial)
+    this.scene.add(this.systemStar)
+
+    definitions.forEach(definition => {
+      const motif = createPlanetMotif(definition)
+      this.planets.push({ definition, motif, radius: definition.radius })
+      this.scene.add(motif.group)
+      const line = createOrbitTrack(this.orbits, definition)
+      this.orbitTracks.push({ definition, line })
+      this.scene.add(line)
     })
 
     this.camera.position.set(0, 3.4, 11)
@@ -88,6 +111,11 @@ export class SpaceSession {
   update(dt: number, actions: Readonly<ShipActions>): void {
     const frame = Number.isFinite(dt) ? Math.min(Math.max(dt, 0), 0.1) : 0
     this.elapsed += frame
+    this.advanceOrbitClock(frame)
+
+    const manualFlight = Math.abs(actions.thrust) + Math.abs(actions.strafe) + Math.abs(actions.lift) > 0.05
+    if (manualFlight) this.coMovingPlanet = null
+    else if (this.held || actions.brake) this.captureNearbyOrbit()
 
     if (this.held) {
       this.controller.stop()
@@ -103,11 +131,35 @@ export class SpaceSession {
     this.updateVisuals(frame, this.held ? 0 : actions.thrust, !this.held && actions.boost)
   }
 
+  /** Keep the system in motion while a world scene owns the renderer. */
+  advanceOrbits(dt: number): void {
+    const frame = Number.isFinite(dt) ? Math.min(Math.max(dt, 0), 0.1) : 0
+    this.elapsed += frame
+    this.advanceOrbitClock(frame)
+  }
+
   getShipPosition(): SpacePosition {
     return {
       sector: [...this.controller.position.sector],
       local: [...this.controller.position.local],
     }
+  }
+
+  getOrbitSystem(): OrbitSystem {
+    return this.orbits
+  }
+
+  getPlanetPosition(definition: PlanetDefinition): SpacePosition {
+    return this.orbits.getPosition(definition)
+  }
+
+  setSelectedPlanet(definition: PlanetDefinition | null): void {
+    this.selectedPlanet = definition
+    this.updateTrackVisibility()
+  }
+
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value
   }
 
   /** World-space direction of the ship's nose, useful for the flight HUD. */
@@ -117,30 +169,42 @@ export class SpaceSession {
   }
 
   distanceTo(definition: PlanetDefinition): number {
-    return distanceBetweenSpacePositions(this.controller.position, definition.position)
+    return distanceBetweenSpacePositions(this.controller.position, this.orbits.getPosition(definition))
   }
 
   hold(value: boolean): void {
+    const wasHeld = this.held
     this.held = value
-    if (value) this.controller.stop()
+    if (value) {
+      this.controller.stop()
+      this.captureNearbyOrbit()
+    } else if (wasHeld) {
+      this.coMovingPlanet = null
+    }
   }
 
   /** Set the ship just outside approach range, looking at the planet. */
   placeOutside(definition: PlanetDefinition): void {
-    const outward = differenceSpacePosition(definition.position, this.controller.position)
+    const planetPosition = this.orbits.getPosition(definition)
+    const outward = differenceSpacePosition(planetPosition, this.controller.position)
     const direction = new THREE.Vector3(...outward)
     if (direction.lengthSq() < 1) direction.set(0, 0, 1)
     direction.normalize().multiplyScalar(definition.radius + 105)
-    this.controller.place(offsetSpacePosition(definition.position, [direction.x, direction.y, direction.z]))
+    this.controller.place(offsetSpacePosition(planetPosition, [direction.x, direction.y, direction.z]))
     this.controller.orientation.setFromUnitVectors(
       new THREE.Vector3(0, 0, -1),
       direction.clone().negate().normalize(),
     )
+    this.coMovingPlanet = definition
     this.accumulator = 0
     this.updateVisuals(0, 0, false)
   }
 
   dispose(): void {
+    this.planets.forEach(proxy => {
+      this.scene.remove(proxy.motif.group)
+      proxy.motif.dispose()
+    })
     const geometries = new Set<THREE.BufferGeometry>()
     const materials = new Set<THREE.Material>()
     this.scene.traverse(object => {
@@ -177,24 +241,63 @@ export class SpaceSession {
 
     this.starDome.position.copy(this.camera.position)
     this.updateNearbyStars()
-    this.updatePlanets(dt)
+    this.updateSystemStar(dt)
+    this.updatePlanets()
+    this.updateTrackVisibility()
   }
 
-  private updatePlanets(dt: number): void {
+  private updateSystemStar(dt: number): void {
+    this.systemStar.position.set(...differenceSpacePosition(this.controller.position, this.orbits.getCenter()))
+    if (!this.reducedMotion) this.systemStar.rotation.y += dt * 0.04
+    for (const track of this.orbitTracks) track.line.position.copy(this.systemStar.position)
+  }
+
+  private updatePlanets(): void {
     for (const proxy of this.planets) {
-      const displacement = differenceSpacePosition(this.controller.position, proxy.definition.position)
+      const displacement = differenceSpacePosition(this.controller.position, this.orbits.getPosition(proxy.definition))
       const distance = Math.hypot(...displacement)
       const marker = smoothStep(PLANET_FULL_DISTANCE, PLANET_MARKER_DISTANCE, distance)
-      const drawDistance = THREE.MathUtils.lerp(distance, 1350, marker)
-      const scale = THREE.MathUtils.lerp(1, 3.5 / proxy.radius, marker)
+      const scale = THREE.MathUtils.lerp(1, 7.5 / proxy.radius, marker)
+      const detail = distance < NEAR_DETAIL_DISTANCE ? 'near' : distance < MID_DETAIL_DISTANCE ? 'mid' : 'far'
 
       this.planetVector.set(...displacement)
-      if (distance > 0.001) this.planetVector.multiplyScalar(drawDistance / distance)
-      proxy.group.position.copy(this.planetVector)
-      proxy.group.scale.setScalar(scale)
-      proxy.group.rotation.y += dt * 0.08
-      proxy.group.visible = Number.isFinite(distance)
+      proxy.motif.group.position.copy(this.planetVector)
+      proxy.motif.group.scale.setScalar(scale)
+      proxy.motif.group.visible = Number.isFinite(distance) && distance < this.camera.far + proxy.radius
+      proxy.motif.update(this.orbits.getElapsedSeconds(), this.reducedMotion, detail)
+    }
+  }
 
+  private updateTrackVisibility(): void {
+    for (const track of this.orbitTracks) {
+      const selected = this.selectedPlanet?.slug === track.definition.slug
+      const close = this.distanceTo(track.definition) < ORBIT_TRACK_RANGE
+      track.line.visible = selected || close
+      const material = track.line.material as THREE.LineBasicMaterial
+      material.opacity = selected ? 0.55 : 0.13
+    }
+  }
+
+  private captureNearbyOrbit(): void {
+    let closest: PlanetDefinition | null = null
+    let nearestDistance = Infinity
+    for (const proxy of this.planets) {
+      const distance = this.distanceTo(proxy.definition)
+      if (distance < proxy.radius + 125 && distance < nearestDistance) {
+        closest = proxy.definition
+        nearestDistance = distance
+      }
+    }
+    if (closest) this.coMovingPlanet = closest
+  }
+
+  private advanceOrbitClock(frame: number): void {
+    const movingPlanet = this.coMovingPlanet
+    const previousPlanetPosition = movingPlanet ? this.orbits.getPosition(movingPlanet) : null
+    this.orbits.advance(frame, !this.reducedMotion)
+    if (movingPlanet && previousPlanetPosition) {
+      const orbitalStep = differenceSpacePosition(previousPlanetPosition, this.orbits.getPosition(movingPlanet))
+      this.controller.position = offsetSpacePosition(this.controller.position, orbitalStep)
     }
   }
 
@@ -367,65 +470,68 @@ function buildNearbyStarGeometry(center: readonly number[]): THREE.BufferGeometr
   return geometry
 }
 
-function createPlanetProxy(
-  definition: PlanetDefinition,
-  index: number,
-  outlineMaterial: THREE.Material,
-): PlanetProxy {
+function createSystemStar(outlineMaterial: THREE.Material): THREE.Group {
   const group = new THREE.Group()
-  const radius = Math.max(12, Math.min(55, definition.radius))
-  const isVoxel = definition.slug === 'voxel'
-  const isBlackHole = definition.slug === 'event-horizon'
-  const isBitboard = definition.slug === 'bitboard'
-  const geometry = isVoxel
-    ? new THREE.IcosahedronGeometry(radius, 1)
-    : new THREE.SphereGeometry(radius, isBitboard ? 12 : 24, isBitboard ? 8 : 16)
-  const bodyMaterial = createSpaceToonMaterial(isBlackHole
-    ? { base: 0x46375e, shadow: 0x0a1025, highlight: 0xa78bfa, outline: 0x020715 }
-    : planetToonPalette(definition.color))
-  const body = new THREE.Mesh(geometry, bodyMaterial)
-  addBackfaceOutline(body, outlineMaterial, 0.045)
-  group.add(body)
+  group.name = 'System Zero core — navigation hub'
 
-  const atmosphere = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 1.12, 20, 12),
-    new THREE.MeshBasicMaterial({ color: definition.color, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.BackSide }),
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(53, 2),
+    createSpaceToonMaterial({
+      base: 0xffba54,
+      shadow: 0x99522f,
+      highlight: 0xffeea4,
+      outline: 0x2c1634,
+    }),
   )
-  group.add(atmosphere)
+  addBackfaceOutline(core, outlineMaterial, 0.055)
+  group.add(core)
 
-  if (isVoxel) {
-    const fragmentMaterial = createSpaceToonMaterial(planetToonPalette(definition.color))
-    for (let i = 0; i < 7; i++) {
-      const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(radius * 0.21, radius * 0.21, radius * 0.21),
-        fragmentMaterial,
-      )
-      const angle = (i / 7) * Math.PI * 2
-      cube.position.set(Math.cos(angle) * radius * 1.18, Math.sin(i * 2.2) * radius * 0.36, Math.sin(angle) * radius * 1.18)
-      cube.rotation.set(i * 0.3, i * 0.7, i * 0.2)
-      addBackfaceOutline(cube, outlineMaterial, 0.09)
-      group.add(cube)
-    }
-  }
+  const facets = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(56.5, 1),
+    new THREE.MeshBasicMaterial({ color: 0xffe0a2, wireframe: true, transparent: true, opacity: 0.35, depthWrite: false }),
+  )
+  facets.rotation.set(0.2, 0.6, 0.4)
+  group.add(facets)
 
-  if (isBlackHole || index % 3 === 1 || definition.slug === 'material-forge') {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(radius * 1.55, isBlackHole ? radius * 0.14 : radius * 0.035, 8, 72),
-      new THREE.MeshBasicMaterial({ color: isBlackHole ? 0xffb052 : definition.color, transparent: true, opacity: 0.73, depthWrite: false }),
+  for (const angle of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(77, 0.9, 4, 80),
+      new THREE.MeshBasicMaterial({ color: 0xffc476, transparent: true, opacity: 0.32, depthWrite: false }),
     )
-    ring.rotation.set(1.17, 0.14, 0.2)
-    group.add(ring)
+    halo.rotation.set(1.24, angle, angle * 0.28)
+    group.add(halo)
   }
 
-  if (isBitboard) {
-    const grid = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(radius * 1.04, 1)),
-      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }),
-    )
-    group.add(grid)
-  }
+  const corona = new THREE.Mesh(
+    new THREE.SphereGeometry(66, 24, 12),
+    new THREE.MeshBasicMaterial({ color: 0xf5a94e, transparent: true, opacity: 0.08, depthWrite: false, side: THREE.BackSide }),
+  )
+  group.add(corona)
+  return group
+}
 
-  return { definition, group, radius }
+function createOrbitTrack(orbits: OrbitSystem, definition: PlanetDefinition): THREE.LineLoop {
+  const center = orbits.getCenter()
+  const points: THREE.Vector3[] = []
+  const segments = 128
+  for (let i = 0; i < segments; i++) {
+    points.push(new THREE.Vector3(...differenceSpacePosition(center, orbits.samplePosition(definition, i / segments))))
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points)
+  const orbit = orbits.getOrbit(definition)
+  const color = orbit.group === 'gameplay' ? 0xff9a79 : orbit.group === 'simulation' ? 0x73e5ce : 0xd5d68b
+  const material = new THREE.LineDashedMaterial({
+    color,
+    transparent: true,
+    opacity: 0.15,
+    depthWrite: false,
+    dashSize: orbit.linePattern === 'solid' ? 10000 : orbit.linePattern === 'dashed' ? 11 : 2,
+    gapSize: orbit.linePattern === 'solid' ? 0 : orbit.linePattern === 'dashed' ? 11 : 13,
+  })
+  const line = new THREE.LineLoop(geometry, material)
+  line.computeLineDistances()
+  line.name = `${definition.title} orbit`
+  return line
 }
 
 function hashCell(x: number, y: number, z: number): number {

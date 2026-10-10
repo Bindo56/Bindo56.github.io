@@ -120,8 +120,12 @@ export class InputActions {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
-    if (event.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return
-    if (this.contextValue === 'space' && (flightKeys.has(event.code) || event.code === 'Tab')) event.preventDefault()
+    if (event.code === 'Tab') return
+    if (event.target instanceof HTMLElement) {
+      if (event.target.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (event.target.closest('button, a, [role="button"]') && (flightKeys.has(event.code) || event.code === 'Enter')) return
+    }
+    if (this.contextValue === 'space' && flightKeys.has(event.code)) event.preventDefault()
     if (!this.held.has(event.code)) this.pressed.add(event.code)
     this.held.add(event.code)
   }

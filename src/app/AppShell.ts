@@ -1,8 +1,10 @@
-import { ACESFilmicToneMapping, SRGBColorSpace, WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, Quaternion, SRGBColorSpace, Vector3, WebGLRenderer } from 'three'
 import { projects } from '../data/projects.ts'
 import { experience } from '../data/experience.ts'
 import { SpaceSession } from '../space/SpaceSession.ts'
+import { differenceSpacePosition } from '../space/SpacePosition.ts'
 import { MediaPopup } from '../ui/MediaPopup.ts'
+import { SystemMap } from '../ui/SystemMap.ts'
 import { parseRoute, pathForPlanet, planetDefinitions } from '../worlds/registry.ts'
 import { InputActions } from './InputActions.ts'
 import { PlanetLoader, type LoadState } from './PlanetLoader.ts'
@@ -96,13 +98,25 @@ export class AppShell {
   private readonly fallback = node('div', 'no-webgl-fallback')
   private readonly themeButton = node('button', 'theme-button')
   private readonly themeChoice = node('span', 'theme-choice')
-  private readonly worldMapButton = node('button', 'nav-button world-map-button is-active', 'World map')
+  private readonly worldMapButton = node('button', 'nav-button world-map-button', 'System map')
   private readonly archiveButton = node('button', 'nav-button', 'Projects')
   private readonly experienceButton = node('button', 'nav-button', 'Experience')
   private readonly location = node('span', 'sector-readout', 'SECTOR 0 · 0 · 0')
   private readonly heading = node('span', 'heading-readout', 'NOSE 0 · 0 · -1')
+  private readonly waypoint = node('div', 'waypoint-indicator')
+  private readonly waypointArrow = node('span', 'waypoint-arrow', '↑')
+  private readonly waypointName = node('strong', 'waypoint-name')
+  private readonly waypointDistance = node('span', 'waypoint-distance')
+  private readonly waypointVector = new Vector3()
+  private readonly cameraInverse = new Quaternion()
   private readonly worldRows = new Map<string, WorldRowUi>()
   private selectedPlanet: PlanetDefinition = planetDefinitions[0]
+  private readonly systemMap = new SystemMap(planetDefinitions, {
+    onSelect: planet => this.selectPlanet(planet),
+    onWarp: planet => this.warpTo(planet),
+    onOpen: planet => void this.navigateToWorld(planet, true),
+    onClose: () => this.closeSystemMap(true),
+  })
   private readonly portfolio: PortfolioView
   private readonly input: InputActions
   private readonly media: MediaPopup
@@ -117,6 +131,7 @@ export class AppShell {
   private dismissedApproach: string | null = null
   private theme: ThemeMode = getTheme()
   private routeGeneration = 0
+  private readonly motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   private frame = 0
   private lastTime = 0
   private disposed = false
@@ -125,7 +140,7 @@ export class AppShell {
     root.replaceChildren()
     this.stage.setAttribute('aria-label', 'Three dimensional portfolio game')
     this.fallback.hidden = true
-    this.ui.append(this.buildHeader(), this.flightUi, this.approach, this.landing, this.worldOverlay, this.loading, this.fallback)
+    this.ui.append(this.buildHeader(), this.flightUi, this.systemMap.element, this.approach, this.landing, this.worldOverlay, this.loading, this.fallback)
     root.append(this.stage, this.ui)
     this.buildFlightUi()
     this.buildApproach()
@@ -151,6 +166,7 @@ export class AppShell {
     this.flyPastButton.addEventListener('click', this.flyPast)
     window.addEventListener('resize', this.onResize)
     window.addEventListener('popstate', this.onPopState)
+    this.motionPreference.addEventListener('change', this.onMotionPreferenceChange)
   }
 
   start(): void {
@@ -166,6 +182,8 @@ export class AppShell {
       this.canvas.setAttribute('aria-label', SPACE_CANVAS_LABEL)
       this.stage.append(this.canvas)
       this.space = new SpaceSession(planetDefinitions)
+      this.space.setSelectedPlanet(this.selectedPlanet)
+      this.space.setReducedMotion(this.motionPreference.matches)
       this.onResize()
       this.frame = requestAnimationFrame(this.tick)
     } catch (error) {
@@ -183,6 +201,7 @@ export class AppShell {
     cancelAnimationFrame(this.frame)
     window.removeEventListener('resize', this.onResize)
     window.removeEventListener('popstate', this.onPopState)
+    this.motionPreference.removeEventListener('change', this.onMotionPreferenceChange)
     this.themeButton.removeEventListener('click', this.toggleTheme)
     this.worldMapButton.removeEventListener('click', this.showWorldMap)
     this.flyPastButton.removeEventListener('click', this.flyPast)
@@ -234,7 +253,7 @@ export class AppShell {
     hero.append(
       node('span', 'eyebrow', '001 / EXPLORATION LOG'),
       title,
-      node('p', 'hero-description', 'Fly between nine worlds shaped by my work in gameplay, AI, simulation, rendering, and tools.'),
+      node('p', 'hero-description', 'Pilot through nine orbiting project worlds shaped by gameplay, AI, simulation, rendering, and tools.'),
     )
     const solarPlanet = planetDefinitions.find(planet => planet.slug === 'event-horizon')
     if (solarPlanet) {
@@ -306,6 +325,8 @@ export class AppShell {
     const center = node('div', 'reticle')
     center.setAttribute('aria-hidden', 'true')
     center.append(node('span', 'reticle-line horizontal'), node('span', 'reticle-line vertical'), node('span', 'reticle-dot'))
+    this.waypoint.setAttribute('aria-label', 'Selected moving destination')
+    this.waypoint.append(this.waypointArrow, this.waypointName, this.waypointDistance)
 
     const hud = node('div', 'flight-hud')
     this.location.dataset.testid = 'ship-position'
@@ -322,7 +343,7 @@ export class AppShell {
     }
     hud.append(status, telemetry, controls)
     this.buildTouchControls()
-    this.flightUi.append(hero, this.atlas, center, hud, this.touchControls)
+    this.flightUi.append(hero, this.atlas, center, this.waypoint, hud, this.touchControls)
   }
 
   private setAtlasCompact(compact: boolean): void {
@@ -333,6 +354,8 @@ export class AppShell {
 
   private selectPlanet(planet: PlanetDefinition): void {
     this.selectedPlanet = planet
+    this.space?.setSelectedPlanet(planet)
+    this.systemMap.select(planet)
     for (const [slug, { row, select, expanded }] of this.worldRows) {
       const selected = slug === planet.slug
       row.classList.toggle('selected', selected)
@@ -342,10 +365,35 @@ export class AppShell {
   }
 
   private readonly showWorldMap = (): void => {
+    if (!this.renderer || !this.space) {
+      this.openPortfolio('projects')
+      return
+    }
+    if (this.systemMap.isOpen) {
+      this.closeSystemMap(true)
+      return
+    }
     if (this.planetSession || this.loadingRoute) this.exitToSpace(true)
     if (this.portfolio.isOpen) this.portfolio.close()
-    this.setAtlasCompact(false)
-    this.worldRows.get(this.selectedPlanet.slug)?.select.focus()
+    if (this.media.isOpen) this.media.close()
+    this.systemMap.select(this.selectedPlanet)
+    this.systemMap.open()
+    this.systemMap.update(this.space.getOrbitSystem())
+    this.flightUi.hidden = true
+    this.approach.hidden = true
+    this.worldMapButton.classList.add('is-active')
+    this.input.setContext('dialog')
+    this.space.hold(true)
+  }
+
+  private closeSystemMap(restoreFocus = false): void {
+    if (!this.systemMap.isOpen) return
+    this.systemMap.close()
+    this.flightUi.hidden = !this.renderer || !!this.planetSession || !!this.loadingRoute
+    this.worldMapButton.classList.remove('is-active')
+    this.restoreContext()
+    if (this.renderer && !this.planetSession && !this.loadingRoute) this.updateApproach()
+    if (restoreFocus) this.worldMapButton.focus()
   }
 
   private buildTouchControls(): void {
@@ -401,6 +449,7 @@ export class AppShell {
     this.media.update()
     this.handleKeys()
     if (this.planetSession) {
+      this.space.advanceOrbits(dt)
       this.planetSession.update(dt)
       this.renderer.render(this.planetSession.scene, this.planetSession.camera)
     } else {
@@ -411,10 +460,12 @@ export class AppShell {
       // allowing any fresh thrust, strafe or lift input to fly away freely.
       if (inOrbit && !actions.thrust && !actions.strafe && !actions.lift && !actions.boost) actions.brake = true
       this.space.update(dt, actions)
-      if (!this.loadingRoute) this.updateApproach()
+      if (!this.loadingRoute && !this.systemMap.isOpen) this.updateApproach()
+      this.systemMap.update(this.space.getOrbitSystem())
       const position = this.space.getShipPosition()
       this.location.textContent = 'SECTOR ' + position.sector.join(' · ') + ' / ' + position.local.map(value => Math.round(value)).join(' · ')
       this.heading.textContent = 'NOSE ' + this.space.getShipForward().map(value => value.toFixed(2)).join(' · ')
+      this.updateWaypoint()
       this.renderer.render(this.space.scene, this.space.camera)
     }
   }
@@ -422,16 +473,32 @@ export class AppShell {
   private handleKeys(): void {
     if (this.media.isOpen) return
     if (this.input.consume('KeyT')) this.toggleTheme()
-    if (this.input.consume('Tab') || this.input.consume('KeyM')) {
+    if (this.input.consume('KeyO')) this.showWorldMap()
+    if (this.input.consume('KeyM')) {
       if (this.portfolio.isOpen) this.portfolio.close()
       else this.openPortfolio('projects')
     }
     if (this.input.consume('Escape')) {
       if (this.portfolio.isOpen) this.portfolio.close()
+      else if (this.systemMap.isOpen) this.closeSystemMap(true)
       else if (this.planetSession) this.exitToSpace(true)
     }
     if (this.planetSession && this.input.consume('Backspace')) this.exitToSpace(true)
-    if (this.approachPlanet && this.input.consume('Enter')) void this.enterApproach()
+    if (this.input.context === 'space' && this.approachPlanet && this.input.consume('Enter')) void this.enterApproach()
+  }
+
+  private updateWaypoint(): void {
+    if (!this.space) return
+    const offset = differenceSpacePosition(this.space.getShipPosition(), this.space.getPlanetPosition(this.selectedPlanet))
+    const distance = Math.max(0, Math.hypot(...offset) - this.selectedPlanet.radius)
+    this.waypointName.textContent = this.selectedPlanet.title
+    this.waypointDistance.textContent = `${Math.round(distance)} U · ${this.selectedPlanet.orbit.group.toUpperCase()}`
+    this.waypointVector.set(...offset).sub(this.space.camera.position)
+      .applyQuaternion(this.cameraInverse.copy(this.space.camera.quaternion).invert())
+    const behind = this.waypointVector.z > 0
+    const bearing = behind ? Math.PI : Math.atan2(this.waypointVector.x, this.waypointVector.y)
+    this.waypointArrow.style.transform = `rotate(${bearing}rad)`
+    this.waypoint.classList.toggle('is-behind', behind)
   }
 
   private updateApproach(): void {
@@ -513,6 +580,7 @@ export class AppShell {
   }
 
   private warpTo(planet: PlanetDefinition): void {
+    this.closeSystemMap()
     if (this.planetSession || this.loadingRoute) this.exitToSpace(true)
     this.selectPlanet(planet)
     this.setAtlasCompact(true)
@@ -524,6 +592,8 @@ export class AppShell {
   }
 
   private async navigateToWorld(planet: PlanetDefinition, push: boolean): Promise<void> {
+    this.closeSystemMap()
+    this.selectPlanet(planet)
     if (push) history.pushState({ world: planet.slug }, '', pathForPlanet(planet))
     document.title = planet.title + ' | Saurabh Kundalwal'
     this.canvas.setAttribute('aria-label', planet.slug === 'event-horizon'
@@ -642,6 +712,7 @@ export class AppShell {
   }
 
   private exitToSpace(push: boolean): void {
+    this.closeSystemMap()
     if (push) history.pushState({}, '', homePath())
     document.title = HOME_TITLE
     this.canvas.setAttribute('aria-label', SPACE_CANVAS_LABEL)
@@ -657,7 +728,7 @@ export class AppShell {
     if (previous) this.space?.placeOutside(previous)
     this.space?.hold(false)
     this.flightUi.hidden = !this.renderer
-    this.worldMapButton.classList.add('is-active')
+    this.worldMapButton.classList.remove('is-active')
     this.landing.hidden = true
     this.loading.hidden = true
     this.restoreContext()
@@ -673,7 +744,12 @@ export class AppShell {
 
   private readonly onPopState = (): void => { this.routeFromLocation() }
 
+  private readonly onMotionPreferenceChange = (): void => {
+    this.space?.setReducedMotion(this.motionPreference.matches)
+  }
+
   private openPortfolio(tab: 'projects' | 'experience'): void {
+    this.closeSystemMap()
     if (this.media.isOpen) this.media.close()
     this.portfolio.open(tab)
     this.input.setContext('dialog')
@@ -687,8 +763,8 @@ export class AppShell {
   }
 
   private restoreContext(): void {
-    this.input.setContext(this.portfolio.isOpen || this.loadingRoute ? 'dialog' : this.planetSession ? 'planet' : 'space')
-    if (!this.portfolio.isOpen && !this.media.isOpen && !this.loadingRoute) this.space?.hold(false)
+    this.input.setContext(this.portfolio.isOpen || this.loadingRoute || this.systemMap.isOpen ? 'dialog' : this.planetSession ? 'planet' : 'space')
+    if (!this.portfolio.isOpen && !this.media.isOpen && !this.loadingRoute && !this.systemMap.isOpen) this.space?.hold(false)
   }
 
   private onLoadState(_state: LoadState): void {

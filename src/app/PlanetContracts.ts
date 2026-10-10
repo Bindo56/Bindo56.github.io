@@ -3,11 +3,25 @@ import type { SpacePosition } from '../space/SpacePosition.ts'
 
 export type ThemeMode = 'dark' | 'light'
 
+export type OrbitGroup = 'gameplay' | 'simulation' | 'engineering'
+
+/** One authored ring of the System Zero portfolio. Angles are radians. */
+export interface OrbitDefinition {
+  radius: number
+  phase: number
+  inclination: number
+  periodSeconds: number
+  group: OrbitGroup
+  glyph: string
+  linePattern: 'solid' | 'dashed' | 'dotted'
+}
+
 export interface PlanetDefinition {
   slug: string
   title: string
   projectKey: string
   position: SpacePosition
+  orbit: OrbitDefinition
   radius: number
   color: number
   load: () => Promise<PlanetModule>

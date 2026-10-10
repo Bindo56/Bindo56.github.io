@@ -907,3 +907,201 @@ a { color: inherit; }
   }
   .solar-mini-hud { top: 76px; right: 12px; }
 }
+
+/* The flight chart is a top-down view of the same moving orbits used by the scene. */
+.system-map {
+  position: absolute;
+  inset: 94px var(--gutter) 20px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+}
+.system-map-heading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 17px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.system-map-heading h2 {
+  margin: 4px 0 0;
+  font: 700 clamp(28px, 3vw, 40px)/.94 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: .015em;
+  text-transform: uppercase;
+}
+.system-map-close {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  background: var(--surface-solid);
+  color: var(--ink);
+  font: 600 11px 'IBM Plex Mono', Consolas, monospace;
+  text-transform: uppercase;
+}
+.system-map-close:hover { border-color: var(--accent); color: var(--accent); }
+.system-map-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 350px); flex: 1; min-height: 0; }
+.system-map-chart {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 20px 18px;
+  background: radial-gradient(circle at center, #112437 0, #071321 48%, #020b18 100%);
+}
+.system-map-chart-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #a9bfd0;
+  font: 500 10px/1.4 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .05em;
+}
+.system-map-field {
+  position: relative;
+  width: min(100%, calc(100dvh - 220px));
+  aspect-ratio: 1;
+  min-width: 0;
+  margin: auto;
+  overflow: visible;
+}
+.system-map-orbits { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.system-map-ring { fill: none; stroke-width: 1.35; opacity: .7; }
+.system-map-ring.group-gameplay { stroke: #f4b260; }
+.system-map-ring.group-simulation { stroke: #61c8c6; }
+.system-map-ring.group-engineering { stroke: #b6ca7b; }
+.system-map-ring.pattern-dashed { stroke-dasharray: 8 8; }
+.system-map-ring.pattern-dotted { stroke-dasharray: 2 8; stroke-linecap: round; }
+.system-map-ring.is-selected { stroke-width: 2.8; opacity: 1; }
+.system-map-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid #f6b866;
+  border-radius: 50%;
+  background: #a5552a;
+  box-shadow: 0 0 0 8px rgba(244,178,96,.09), 0 0 32px rgba(244,178,96,.55);
+  color: #fff5dd;
+  transform: translate(-50%, -50%);
+}
+.system-map-core-symbol { font: 700 16px 'IBM Plex Mono', Consolas, monospace; }
+.system-map-core-label {
+  position: absolute;
+  top: calc(100% + 10px);
+  color: #e8c895;
+  font: 600 10px 'IBM Plex Mono', Consolas, monospace;
+  white-space: nowrap;
+}
+.system-map-marker {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid var(--world-color);
+  border-radius: 50%;
+  background: #0a1724;
+  color: #f6f2e9;
+  box-shadow: 0 0 0 4px rgba(2,10,20,.8), 0 0 18px var(--world-color);
+  transform: translate(-50%, -50%);
+}
+.system-map-marker.group-simulation { border-radius: 10px; }
+.system-map-marker.group-engineering { border-radius: 4px; transform: translate(-50%, -50%) rotate(45deg); }
+.system-map-marker.group-engineering > * { transform: rotate(-45deg); }
+.system-map-marker:hover, .system-map-marker.is-selected {
+  background: var(--world-color);
+  color: #091421;
+  box-shadow: 0 0 0 5px #f6f2e9, 0 0 27px var(--world-color);
+}
+.system-map-marker-symbol { font: 700 18px/.9 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; }
+.system-map-marker-index { position: absolute; top: calc(100% + 7px); color: #dce8ec; font: 600 9px 'IBM Plex Mono', Consolas, monospace; }
+.system-map-detail { min-height: 0; overflow-y: auto; padding: 21px 22px 24px; border-left: 1px solid var(--line); scrollbar-color: var(--line) transparent; }
+.system-map-selection { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.system-map-selection h3 { margin: 8px 0 10px; font: 700 31px/.95 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; }
+.system-map-selection p { margin: 0 0 17px; color: var(--muted); font: 400 13px/1.45 Barlow, Arial, sans-serif; }
+.system-map-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.system-map-actions > :is(button, a) { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; flex: 1 1 125px; text-align: center; text-decoration: none; }
+.system-map-source { color: var(--accent); font: 600 11px 'IBM Plex Mono', Consolas, monospace; text-decoration: underline; text-underline-offset: 3px; }
+.system-map-index { display: grid; gap: 17px; padding-top: 18px; }
+.system-map-group h3 { margin: 0; color: var(--accent); font: 600 10px/1.4 'IBM Plex Mono', Consolas, monospace; letter-spacing: .06em; }
+.system-map-group.group-simulation h3 { color: #58b9b6; }
+.system-map-group.group-engineering h3 { color: #91a85a; }
+.system-map-group p { margin: 3px 0 7px; color: var(--muted); font: 400 12px/1.3 Barlow, Arial, sans-serif; }
+.system-map-index-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  font: 600 12px Barlow, Arial, sans-serif;
+  text-align: left;
+}
+.system-map-index-button:hover, .system-map-index-button.is-selected { border-color: var(--line); background: var(--surface-soft); }
+.system-map-index-glyph { width: 23px; color: var(--accent); font: 700 14px 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-align: center; }
+.system-map-group.group-simulation .system-map-index-glyph { color: #58b9b6; }
+.system-map-group.group-engineering .system-map-index-glyph { color: #91a85a; }
+
+.waypoint-indicator {
+  position: absolute;
+  top: 98px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  max-width: min(360px, 35vw);
+  padding: 7px 11px;
+  border: 1px solid rgba(164,193,209,.45);
+  background: rgba(6,20,34,.87);
+  color: #f2eee4;
+  font: 600 10px/1.15 'IBM Plex Mono', Consolas, monospace;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.waypoint-arrow { display: inline-block; color: #f4b260; font: 700 22px/1 'IBM Plex Mono', Consolas, monospace; }
+.waypoint-name { max-width: 13ch; overflow: hidden; font-weight: 600; text-overflow: ellipsis; text-transform: uppercase; }
+.waypoint-distance { color: #a7b4c4; }
+.waypoint-indicator.is-behind .waypoint-distance::after { content: ' · BEHIND'; color: #f4b260; }
+
+@media (max-width: 900px) {
+  .system-map-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 32vw); }
+  .system-map-detail { padding: 16px; }
+  .system-map-field { width: min(100%, calc(100dvh - 215px)); }
+}
+@media (max-width: 680px) {
+  .system-map { inset: 116px 12px 12px; overflow-y: auto; }
+  .system-map-heading { position: sticky; top: 0; z-index: 3; padding: 13px 15px; background: var(--surface); }
+  .system-map-heading h2 { font-size: 29px; }
+  .system-map-body { display: block; }
+  .system-map-chart { padding: 10px 13px 15px; }
+  .system-map-field { width: min(100%, 55dvh); }
+  .system-map-detail { overflow: visible; border-top: 1px solid var(--line); border-left: 0; }
+  .system-map-index { grid-template-columns: 1fr; }
+  .system-map-chart-caption { font-size: 9px; }
+  .waypoint-indicator { top: 315px; max-width: calc(100% - 24px); min-height: 34px; padding: 5px 8px; font-size: 9px; }
+}
+@media (max-height: 520px) and (pointer: coarse) {
+  .system-map { inset: 73px 12px 8px; }
+  .system-map-field { width: min(100%, 68dvh); }
+  .waypoint-indicator { top: 75px; }
+}
