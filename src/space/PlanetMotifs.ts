@@ -266,39 +266,169 @@ function droneMotif(radius: number, color: number): MotifParts {
 }
 
 function gravityMotif(radius: number): MotifParts {
-  const parts = baseParts(radius, 0x38264f, new THREE.IcosahedronGeometry(radius * 0.78, 2))
-  const darkCore = new THREE.Mesh(
-    new THREE.SphereGeometry(radius * 0.8, 24, 16),
-    new THREE.MeshBasicMaterial({ color: 0x080918 }),
-  )
-  parts.group.add(darkCore)
-  const accretion = new THREE.Group()
-  for (const [scale, tube, color] of [
-    [1.25, 0.14, 0xff9c58],
-    [1.55, 0.035, 0xffd9a8],
-    [1.8, 0.013, 0xa78bfa],
-  ]) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(radius * scale, radius * tube, 8, 72),
-      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: scale > 1.7 ? 0.5 : 0.9, depthWrite: false }),
-    )
-    accretion.add(ring)
+  const parts: MotifParts = {
+    group: new THREE.Group(),
+    mid: new THREE.Group(),
+    near: new THREE.Group(),
+    animate: () => undefined,
   }
-  accretion.rotation.set(1.18, 0.2, 0.12)
-  parts.group.add(accretion)
+
+  // Keep the event horizon truly black. The disk sits on a tilted plane, so its
+  // far half disappears behind the sphere while the near half crosses in front.
+  const darkCore = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 0.84, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x01030a, toneMapped: false }),
+  )
+  darkCore.frustumCulled = false
+  parts.group.add(darkCore)
+
+  // A facing frame makes the silhouette legible from every flight direction.
+  // The disk still has real depth inside that frame and is occluded by the core.
+  const facing = new THREE.Group()
+  parts.group.add(facing)
+  darkCore.onBeforeRender = (_renderer, _scene, camera) => {
+    facing.quaternion.copy(camera.quaternion)
+    facing.updateMatrixWorld(true)
+  }
+
+  const accretion = new THREE.Group()
+  accretion.rotation.x = -1.2
+  facing.add(accretion)
+
+  const diskGeometry = new THREE.RingGeometry(radius * 0.9, radius * 2.15, 128, 8)
+  const positions = diskGeometry.getAttribute('position')
+  const colors = new Float32Array(positions.count * 3)
+  const hot = new THREE.Color(0xffeac0)
+  const amber = new THREE.Color(0xffa553)
+  const ember = new THREE.Color(0x913a40)
+  const tint = new THREE.Color()
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i)
+    const y = positions.getY(i)
+    const distance = Math.hypot(x, y) / radius
+    const radial = THREE.MathUtils.clamp((distance - 0.9) / 1.25, 0, 1)
+    if (radial < 0.42) tint.copy(hot).lerp(amber, radial / 0.42)
+    else tint.copy(amber).lerp(ember, (radial - 0.42) / 0.58)
+    const angle = Math.atan2(y, x)
+    const streak = 0.83 + 0.17 * Math.sin(angle * 9 + radial * 17)
+    const brightSide = 0.75 + 0.25 * Math.cos(angle - 0.55)
+    tint.multiplyScalar(streak * brightSide)
+    colors[i * 3] = tint.r
+    colors[i * 3 + 1] = tint.g
+    colors[i * 3 + 2] = tint.b
+  }
+  diskGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+  const disk = new THREE.Mesh(
+    diskGeometry,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+  )
+  accretion.add(disk)
+
+  const streamers = new THREE.Group()
+  for (let i = 0; i < 4; i++) {
+    const filament = new THREE.Mesh(
+      new THREE.TorusGeometry(radius * (1.09 + i * 0.21), radius * (i === 0 ? 0.026 : 0.013), 5, 54, Math.PI * (0.62 + i * 0.12)),
+      new THREE.MeshBasicMaterial({
+        color: i === 0 ? 0xffe9bd : 0xffa55a,
+        transparent: true,
+        opacity: i === 0 ? 0.9 : 0.55,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    )
+    filament.rotation.z = i * 1.67
+    streamers.add(filament)
+  }
+  accretion.add(streamers)
+
+  // The two lifted arcs suggest light bent above and below the horizon. Their
+  // broad translucent underlay supplies a soft glow without a postprocess pass.
+  for (const upper of [true, false]) {
+    const sign = upper ? 1 : -1
+    const curve = new THREE.CubicBezierCurve3(
+      new THREE.Vector3(-radius * 1.58, sign * radius * 0.16, radius * 0.16),
+      new THREE.Vector3(-radius * 0.94, sign * radius * 1.48, radius * 0.16),
+      new THREE.Vector3(radius * 0.94, sign * radius * 1.48, radius * 0.16),
+      new THREE.Vector3(radius * 1.58, sign * radius * 0.16, radius * 0.16),
+    )
+    const arcGeometry = new THREE.TubeGeometry(curve, 64, radius * (upper ? 0.045 : 0.035), 6, false)
+    const glow = new THREE.Mesh(
+      new THREE.TubeGeometry(curve, 64, radius * 0.12, 6, false),
+      new THREE.MeshBasicMaterial({
+        color: upper ? 0xffaa60 : 0xff7848,
+        transparent: true,
+        opacity: 0.19,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    )
+    const arc = new THREE.Mesh(
+      arcGeometry,
+      new THREE.MeshBasicMaterial({
+        color: upper ? 0xffe1a0 : 0xffa260,
+        transparent: true,
+        opacity: upper ? 0.86 : 0.66,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    )
+    facing.add(glow, arc)
+  }
+
+  const photonGlow = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 0.9, radius * 0.105, 8, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xff8b4e,
+      transparent: true,
+      opacity: 0.22,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+  )
+  const photonRing = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 0.9, radius * 0.025, 6, 96),
+    new THREE.MeshBasicMaterial({
+      color: 0xffcd82,
+      transparent: true,
+      opacity: 0.96,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    }),
+  )
+  photonGlow.position.z = radius * 0.08
+  photonRing.position.z = radius * 0.09
+  facing.add(photonGlow, photonRing)
+  facing.traverse(object => {
+    // The facing transform is refreshed at draw time, after frustum collection.
+    if (object instanceof THREE.Mesh) object.frustumCulled = false
+  })
+
   const stones = new THREE.Group()
-  const rockGeometry = new THREE.IcosahedronGeometry(radius * 0.055, 0)
-  const rockMaterial = createSpaceToonMaterial(planetToonPalette(0xa79bb4))
-  for (let i = 0; i < 12; i++) {
+  const rockGeometry = new THREE.IcosahedronGeometry(radius * 0.045, 0)
+  const rockMaterial = createSpaceToonMaterial(planetToonPalette(0x9c8290))
+  for (let i = 0; i < 8; i++) {
     const rock = new THREE.Mesh(rockGeometry, rockMaterial)
     const angle = i * 2.39996
-    const distance = radius * (1.9 + (i % 3) * 0.13)
-    rock.position.set(Math.cos(angle) * distance, Math.sin(i * 1.4) * radius * 0.13, Math.sin(angle) * distance)
+    const distance = radius * (2.24 + (i % 3) * 0.13)
+    rock.position.set(Math.cos(angle) * distance, Math.sin(i * 1.4) * radius * 0.12, Math.sin(angle) * distance)
     stones.add(rock)
   }
   parts.mid.add(stones)
   parts.animate = time => {
-    accretion.rotation.z = 0.12 + time * 0.12
+    streamers.rotation.z = time * 0.11
     stones.rotation.y = -time * 0.045
   }
   return parts

@@ -93,8 +93,8 @@ const module: PlanetModule = {
     intro.append(
       el('span', 'eyebrow', 'PLAYABLE WORLD / UNITY DOTS PROJECT'),
       title,
-      el('p', '', 'Launch five stone belts and a swarm of tiny stars. Change their speed and gravity, then watch them orbit, fall inward, or escape.'),
-      el('p', 'solar-intro-note', 'Inspired by my Unity ECS and Burst solar-system simulation. This playable version runs in Three.js.'),
+      el('p', '', 'Enter a black-hole gravity lab. Launch five stone belts and a star swarm, then shape their orbit, plunge, or escape.'),
+      el('p', 'solar-intro-note', 'Gargantua-inspired light is visual art; the playable gravity model is a Three.js interpretation of my Unity ECS and Burst project.'),
     )
     const start = el('button', 'primary-button', 'Start experimenting ↗')
     start.type = 'button'
@@ -113,7 +113,7 @@ const module: PlanetModule = {
     controls.append(
       el('span', 'eyebrow', 'EXPERIMENT 001 / CENTRAL GRAVITY'),
       el('h2', '', 'Solar DOTS'),
-      el('p', '', 'Each colored orbit carries a stone family. Tiny stars roam between the belts. Tune the launch and watch both respond.'),
+      el('p', '', 'A dark horizon anchors five stone families and a free star swarm. Tune gravity and launch speed to reshape their paths.'),
     )
     const presets = el('div', 'solar-presets')
     presets.setAttribute('role', 'group')
@@ -213,16 +213,18 @@ const module: PlanetModule = {
     const controlsLinks = el('div', 'solar-links')
     if (project?.github) controlsLinks.append(external('Original Unity source ↗', project.github))
     if (project?.video) controlsLinks.append(external('Original video ↗', project.video))
-    const proof = el('p', 'solar-proof', 'Original: Unity ECS + Burst. Interactive adaptation: Three.js.')
+    const proof = el('p', 'solar-proof', 'Original: Unity ECS + Burst. Browser gravity: Three.js. Black-hole lensing: stylized visual.')
     const buildNotes = el('details', 'solar-build-notes')
     buildNotes.append(
       el('summary', '', 'How the original works'),
       el('p', '', 'The Unity version updates many entities with ECS systems and Burst jobs. Each body accelerates toward a fixed center, then exits the simulation at an inner or outer boundary.'),
       el('p', '', 'This browser version recreates that central-gravity experiment with typed arrays and batched Three.js particles.'),
+      el('p', '', 'The glowing disk and bent light are procedural artwork inspired by cinematic black holes, not a relativistic ray-tracing simulation.'),
     )
     controls.append(presets, sliders, actions, status, stats, laneLegend, controlsLinks, proof, buildNotes)
 
     const mini = el('aside', 'solar-mini-hud')
+    mini.hidden = true
     mini.setAttribute('aria-label', 'Browser simulation status')
     mini.append(el('span', '', 'BROWSER SIMULATION'), document.createElement('br'))
     const miniCount = el('strong', '', world.capacity.toLocaleString() + ' BODIES')
@@ -241,10 +243,20 @@ const module: PlanetModule = {
     zoomControls.append(zoomOut, zoomIn)
     zoomOut.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(115) })
     zoomIn.addEventListener('click', () => { if (host.isInteractive()) visual.zoom(-115) })
+    const viewControls = el('div', 'solar-view-controls')
+    const focusView = el('button', '', 'Black hole')
+    focusView.type = 'button'
+    focusView.setAttribute('aria-label', 'Focus camera on black hole')
+    const systemView = el('button', '', 'All orbits')
+    systemView.type = 'button'
+    systemView.setAttribute('aria-label', 'Show full orbital system')
+    focusView.addEventListener('click', () => { if (host.isInteractive()) visual.focusBlackHole() })
+    systemView.addEventListener('click', () => { if (host.isInteractive()) visual.showSystem() })
+    viewControls.append(focusView, systemView)
     const zoomHint = window.matchMedia('(pointer: coarse)').matches
       ? 'DRAG TO ORBIT · PINCH OR TAP +/− TO ZOOM'
       : 'DRAG TO ORBIT · SCROLL OR TAP +/− TO ZOOM'
-    mini.append(miniCount, document.createElement('br'), miniSpeed, document.createElement('br'), el('small', '', zoomHint), zoomControls)
+    mini.append(miniCount, document.createElement('br'), miniSpeed, document.createElement('br'), el('small', '', zoomHint), zoomControls, viewControls)
     root.append(intro, controls, mini)
     host.uiRoot.replaceChildren(root)
 
@@ -272,7 +284,9 @@ const module: PlanetModule = {
       started = true
       intro.hidden = true
       controls.hidden = false
+      mini.hidden = false
       controls.append(exit)
+      visual.showSystem()
       launch()
       launchButton.focus({ preventScroll: true })
     })

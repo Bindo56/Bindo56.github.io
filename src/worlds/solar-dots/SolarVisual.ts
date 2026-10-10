@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { FREE_STAR_LANE, ORBITAL_LANES, type StoneKind } from './OrbitalLanes.ts'
+import { BlackHoleVisual } from './BlackHoleVisual.ts'
 import { createSolarToonMaterial } from './SolarToonShader.ts'
 
 const DISK_RADIUS = 34
-const CORE_RADIUS = 2.45
 const BASE_DISTANCE = 86
 
 interface StoneBatch {
@@ -35,11 +35,8 @@ export class SolarVisual {
   private readonly emberColors: Float32Array
   private readonly dustGeometry = new THREE.BufferGeometry()
   private readonly emberGeometry = new THREE.BufferGeometry()
-  private readonly core: THREE.Mesh
+  private readonly blackHole: BlackHoleVisual
   private readonly nebula: THREE.Sprite
-  private readonly violetGlow: THREE.Sprite
-  private readonly outerGlow: THREE.Sprite
-  private readonly innerGlow: THREE.Sprite
   private readonly corona: THREE.Points
   private readonly stoneBatches: StoneBatch[] = []
   private readonly stoneTransform = new THREE.Object3D()
@@ -48,20 +45,20 @@ export class SolarVisual {
   private readonly textures: THREE.Texture[] = []
   private targetAzimuth = 0.32
   private azimuth = 0.32
-  private targetElevation = 0.42
-  private elevation = 0.42
+  private targetElevation = 0.23
+  private elevation = 0.23
   private targetDistance = BASE_DISTANCE
   private distance = BASE_DISTANCE
   private userZoomed = false
+  private focusedOnBlackHole = false
   private elapsed = 0
   private disposed = false
 
   constructor(capacity: number) {
     this.capacity = Math.max(1, Math.floor(Number.isFinite(capacity) ? capacity : 1))
-    this.scene.background = new THREE.Color(0x100820)
+    this.scene.background = new THREE.Color(0x02060d)
 
     const particleTexture = this.trackTexture(makeRadialTexture(64, 5.4))
-    const glowTexture = this.trackTexture(makeRadialTexture(128, 3.1))
     const nebulaTexture = this.trackTexture(makeNebulaTexture(256))
 
     this.dustPositions = new Float32Array(this.capacity * 3)
@@ -105,10 +102,14 @@ export class SolarVisual {
     this.addOrbitalGuides()
     this.addStoneBatches()
 
+    this.blackHole = new BlackHoleVisual()
+    this.scene.add(this.blackHole.group)
+
     this.nebula = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
       map: nebulaTexture,
+      color: 0x9c7256,
       transparent: true,
-      opacity: 0.48,
+      opacity: 0.1,
       depthWrite: false,
       depthTest: false,
       blending: THREE.AdditiveBlending,
@@ -117,73 +118,19 @@ export class SolarVisual {
     this.nebula.renderOrder = -1
     this.scene.add(this.nebula)
 
-    this.violetGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: 0x8e32c1,
-      transparent: true,
-      opacity: 0.12,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-    })))
-    this.violetGlow.scale.set(72, 72, 1)
-    this.violetGlow.renderOrder = 3
-    this.scene.add(this.violetGlow)
-
-    this.outerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: 0xffa132,
-      transparent: true,
-      opacity: 0.61,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-    })))
-    this.outerGlow.scale.set(36, 36, 1)
-    this.outerGlow.renderOrder = 4
-    this.scene.add(this.outerGlow)
-
-    const coreGeometry = this.trackGeometry(new THREE.SphereGeometry(CORE_RADIUS, 32, 20))
-    const coreOutline = new THREE.Mesh(
-      coreGeometry,
-      this.trackMaterial(new THREE.MeshBasicMaterial({ color: 0x461d2e, side: THREE.BackSide, toneMapped: false })),
-    )
-    coreOutline.scale.setScalar(1.09)
-    coreOutline.renderOrder = 4
-    this.scene.add(coreOutline)
-    this.core = new THREE.Mesh(coreGeometry, this.trackMaterial(createSolarToonMaterial({
-      base: 0xe98231,
-      shadow: 0x92384a,
-      highlight: 0xffd574,
-      outline: 0x6a2d37,
-      glow: 0xff8f30,
-      sun: true,
-    })))
-    this.core.renderOrder = 5
-    this.scene.add(this.core)
-    this.scene.add(new THREE.AmbientLight(0xffbd75, 0.62))
-    const coreLight = new THREE.DirectionalLight(0xffe6af, 2.2)
+    this.scene.add(new THREE.AmbientLight(0xffd4a6, 0.45))
+    const coreLight = new THREE.DirectionalLight(0xffe6ba, 1.5)
     coreLight.position.set(-7, 8, 11)
     this.scene.add(coreLight)
-    const coolFill = new THREE.DirectionalLight(0x8598d9, 0.78)
+    const coolFill = new THREE.DirectionalLight(0x8598b9, 0.55)
     coolFill.position.set(8, -5, -9)
     this.scene.add(coolFill)
 
-    this.innerGlow = new THREE.Sprite(this.trackMaterial(new THREE.SpriteMaterial({
-      map: glowTexture,
-      color: 0xffd88a,
-      transparent: true,
-      opacity: 0.26,
-      depthWrite: false,
-      depthTest: false,
-      blending: THREE.AdditiveBlending,
-    })))
-    this.innerGlow.scale.set(8, 8, 1)
-    this.innerGlow.renderOrder = 6
-    this.scene.add(this.innerGlow)
-
     this.corona = this.makeCorona(particleTexture)
     this.scene.add(this.corona)
+    // The landing opens on the black hole; Start pulls back to the full lab.
+    this.focusBlackHole()
+    this.distance = this.targetDistance
     this.update(0)
   }
 
@@ -272,7 +219,9 @@ export class SolarVisual {
     // Fit the first view to the viewport, then let explicit zoom crop the disk.
     const aspect = THREE.MathUtils.clamp(this.camera.aspect || 1, 0.36, 3)
     const mobileCrop = THREE.MathUtils.clamp((0.82 - aspect) / 0.38, 0, 1)
-    const wantedDistance = this.userZoomed ? this.targetDistance : Math.max(this.targetDistance, this.fitDistance())
+    const wantedDistance = this.focusedOnBlackHole
+      ? Math.max(this.targetDistance, this.focusDistance())
+      : this.userZoomed ? this.targetDistance : Math.max(this.targetDistance, this.fitDistance())
     this.distance = THREE.MathUtils.lerp(this.distance, wantedDistance, catchUp)
 
     const flat = this.distance * Math.cos(this.elevation)
@@ -281,13 +230,9 @@ export class SolarVisual {
       Math.sin(this.elevation) * this.distance,
       Math.cos(this.azimuth) * flat,
     )
-    this.camera.lookAt(0, -15 * mobileCrop, 0)
+    this.camera.lookAt(0, (this.focusedOnBlackHole ? -7 : -15) * mobileCrop, 0)
 
-    const breathe = Math.sin(this.elapsed * 2.1) * 0.035
-    this.outerGlow.scale.setScalar(36 * (1 + breathe))
-    this.violetGlow.scale.setScalar(72 * (1 - breathe * 0.6))
-    this.innerGlow.scale.setScalar(8 * (1 + breathe * 0.6))
-    this.core.scale.setScalar(1 + breathe * 0.25)
+    this.blackHole.update(this.elapsed, this.camera)
     this.corona.rotation.y += frame * 0.12
   }
 
@@ -303,10 +248,34 @@ export class SolarVisual {
   /** Wheel-style delta: positive moves away, negative moves closer. */
   zoom(delta: number): void {
     if (this.disposed || !Number.isFinite(delta)) return
-    const startingDistance = this.userZoomed ? this.targetDistance : Math.max(this.distance, this.fitDistance())
+    const startingDistance = this.focusedOnBlackHole
+      ? Math.max(this.distance, this.focusDistance())
+      : this.userZoomed ? this.targetDistance : Math.max(this.distance, this.fitDistance())
     this.userZoomed = true
+    this.focusedOnBlackHole = false
     const minimum = this.camera.aspect < 0.7 ? 60 : 40
     this.targetDistance = THREE.MathUtils.clamp(startingDistance * Math.exp(delta * 0.002), minimum, 220)
+  }
+
+  focusBlackHole(): void {
+    if (this.disposed) return
+    this.userZoomed = true
+    this.focusedOnBlackHole = true
+    this.targetDistance = 34
+  }
+
+  showSystem(): void {
+    if (this.disposed) return
+    this.userZoomed = false
+    this.focusedOnBlackHole = false
+    this.targetDistance = BASE_DISTANCE
+  }
+
+  private focusDistance(): number {
+    const aspect = THREE.MathUtils.clamp(this.camera.aspect || 1, 0.36, 3)
+    const verticalHalfAngle = THREE.MathUtils.degToRad(this.camera.fov / 2)
+    // Fit the full disk across the narrow dimension with a little breathing room.
+    return 10.6 / (Math.tan(verticalHalfAngle) * Math.min(1, aspect))
   }
 
   private fitDistance(): number {
@@ -323,6 +292,7 @@ export class SolarVisual {
       batch.mesh.dispose()
       batch.outline.dispose()
     }
+    this.blackHole.dispose()
     this.scene.clear()
     this.geometries.forEach(geometry => geometry.dispose())
     this.materials.forEach(material => material.dispose())
@@ -342,9 +312,9 @@ export class SolarVisual {
       positions[offset + 1] = z * 270
       positions[offset + 2] = Math.sin(angle) * radial
       const shade = 0.32 + hash01(index * 3 + 10) * 0.54
-      colors[offset] = shade * 0.76
-      colors[offset + 1] = shade * 0.57
-      colors[offset + 2] = shade
+      colors[offset] = shade * 0.93
+      colors[offset + 1] = shade * 0.86
+      colors[offset + 2] = shade * 0.8
     }
     const geometry = this.trackGeometry(new THREE.BufferGeometry())
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -377,7 +347,7 @@ export class SolarVisual {
         this.trackMaterial(new THREE.MeshBasicMaterial({
           color: lane.color,
           transparent: true,
-          opacity: 0.17,
+          opacity: 0.08,
           depthWrite: false,
           side: THREE.DoubleSide,
           blending: THREE.AdditiveBlending,
@@ -392,7 +362,7 @@ export class SolarVisual {
         this.trackMaterial(new THREE.MeshBasicMaterial({
           color: lane.color,
           transparent: true,
-          opacity: 0.82,
+          opacity: 0.46,
           depthWrite: false,
           side: THREE.DoubleSide,
           blending: THREE.AdditiveBlending,

@@ -845,7 +845,8 @@ a { color: inherit; }
 .solar-mini-hud :is(span, small) { color: var(--muted); }
 .solar-mini-hud .solar-mini-speed { display: block; margin-top: 4px; color: var(--accent); }
 .solar-zoom-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-.solar-zoom-controls button {
+.solar-view-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.solar-zoom-controls button, .solar-view-controls button {
   display: grid;
   place-items: center;
   min-height: 44px;
@@ -854,8 +855,9 @@ a { color: inherit; }
   color: var(--ink);
   font: 600 23px/1 'IBM Plex Mono', Consolas, monospace;
 }
-.solar-zoom-controls button:hover { border-color: var(--accent); color: var(--accent); }
-.solar-zoom-controls button:active { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.solar-view-controls button { padding: 5px 3px; font-size: 10px; line-height: 1.15; text-transform: uppercase; }
+.solar-zoom-controls button:hover, .solar-view-controls button:hover { border-color: var(--accent); color: var(--accent); }
+.solar-zoom-controls button:active, .solar-view-controls button:active { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 
 @media (max-width: 900px) {
   .solar-intro, .solar-control-panel { left: 20px; width: min(330px, 41vw); padding: 18px; }

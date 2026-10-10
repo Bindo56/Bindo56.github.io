@@ -17,11 +17,11 @@ The browser world is a **Three.js interpretation**. The original project uses Un
 | Direct/shared URL | Show the scene, a brief Start panel, source/video links, and a visible return path | Refreshable GitHub Pages route |
 | GitHub profile and DOTS repository, after release | Add a **Play the interactive portfolio world** link beside the existing DOTS project/source link; retain the existing portfolio links | Public playable route |
 
-Keep `/worlds/event-horizon/` as the canonical URL so existing links and history work. **Solar DOTS** is the visible title; **Event Horizon** can be a later stylized scenario rather than a claim about the original physics. Set the page title, description, and social preview for the direct route when the playable world ships. Do not link people to a new playable claim until that route actually works.
+Keep `/worlds/event-horizon/` as the canonical URL so existing links and history work. **Solar DOTS** is the visible title; **Event Horizon** describes the stylized black-hole setting, not the original project's physics. Set the page title, description, and social preview for the direct route when the playable world ships. Do not link people to a new playable claim until that route actually works.
 
 ## The first minute
 
-1. **0–5 seconds — visual hook.** Show a dark purple orbital field, a bright gold center, and moving particles. One sentence explains the action: “Launch a swarm and shape its orbit.” A clear Start button leaves the source and video links visible.
+1. **0–5 seconds — visual hook.** Show a dark orbital field, a black circular shadow, a thin warm accretion disk, stylized arcs above and below it, and moving particles. One sentence explains the action: “Launch a swarm and shape its orbit.” A clear Start button leaves the source and video links visible.
 2. **5–20 seconds — first input.** One click or tap launches a seeded ring of bodies. The result is readable without knowing physics: bodies orbit, fall inward, or escape.
 3. **20–40 seconds — cause and effect.** Two controls change central gravity and launch speed. The next launch responds immediately; a Reset button restores the chosen preset. Show small **orbiting / captured / escaped** counters.
 4. **40–60 seconds — reason to stay or explore.** Offer another preset and an optional “keep the swarm in orbit for 10 seconds” challenge. Show a compact **How I built the original** panel with the Unity DOTS source, original video, and a route back to Projects.
@@ -33,7 +33,7 @@ No mandatory tutorial, account, leaderboard, or timed interruption. Every preset
 - **Presets:** Stable Orbit (near-circular launch), Solar Plunge (slower launch), and Escape Path (faster launch). Each changes the initial conditions, not the underlying rule. Save the selected preset in the URL query only after route and Back/Forward behavior are tested.
 - **Controls:** Start, Launch swarm, Gravity, Launch speed, Pause/Resume, Reset, and camera orbit/zoom. The first view uses safe defaults; advanced controls can sit behind a small “Experiment” disclosure.
 - **Feedback:** Color or trail length communicates speed, and a brief pulse marks capture or escape. Counters describe the browser simulation. Add a short text explanation when a preset succeeds or fails.
-- **Visual fidelity:** Recreate the video's dense orbital silhouette and gold core against a dark violet scene. Keep the site's interface light/dark toggle limited to UI panels; the simulation remains dark in both modes. Avoid expensive postprocessing until the core movement is smooth.
+- **Visual fidelity:** Keep the video's dense orbital silhouette while using a cinematic black-hole centerpiece: a warm disk and visual bent-light arcs around a black shadow. These arcs are shader artwork, not physical gravitational lensing. The simulation remains dark in both interface themes. Avoid expensive postprocessing until the core movement is smooth.
 - **Portfolio evidence:** A persistent **Original Unity DOTS source** link and **Watch original demo** link sit in the world panel. A small comparison states: “Original: Unity ECS/Burst. This interactive world: Three.js.” The world must never hide the author's name, experience, Projects, or Contact access.
 
 ## Simulation model
@@ -46,13 +46,13 @@ Use a deterministic central-attractor model, matching the *idea* of the source r
 4. Derive preset speeds from the chosen gravity and spawn radius so Stable Orbit, Plunge, and Escape produce distinct, understandable results. Clamp controls to useful ranges.
 5. Keep simulation state separate from visuals and UI. Pause, Reset, route exit, and visibility changes must not leave updates or listeners running.
 
-Full N-body attraction, relativistic black-hole effects, gravitational lensing, and a claimed 100,000-body browser benchmark are outside this first world release.
+Full N-body attraction, relativistic black-hole physics, physically traced gravitational lensing, and a claimed 100,000-body browser benchmark are outside this first world release. The visual disk and arcs do not affect the central-attractor simulation.
 
 ## Rendering and performance approach
 
 - Render the swarm as one or a few `THREE.Points` batches backed by `BufferGeometry` position/color attributes, not one mesh per body. Use `DynamicDrawUsage` for changing attributes and update only active ranges where practical. Reserve instanced meshes for a small number of hero bodies if they add visual value. [Three.js Points](https://threejs.org/docs/pages/PointsMaterial.html), [BufferGeometry](https://threejs.org/docs/pages/BufferGeometry.html), [BufferAttribute updates](https://threejs.org/docs/pages/BufferAttribute.html)
 - Start with a modest measured particle budget, then scale by device tier and observed frame time. Prefer fewer clear particles on mobile to an unreadable dense field. Show actual browser counts in any performance panel; never reuse Unity counts as browser metrics.
-- Generate the sun/core, glow, and orbital guides procedurally. Use one scene and the shell's existing renderer; avoid another canvas, a second frame loop, external model downloads, or a backend.
+- Generate the black-hole shadow, accretion disk, stylized bent-light arcs, and orbital guides procedurally. Use one scene and the shell's existing renderer; avoid another canvas, a second frame loop, external model downloads, or a backend.
 - Pause the simulation when the page is hidden and resume without a large catch-up step. Reduce particle motion and disable optional glow when reduced motion is requested. [Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
 - Profile before adding a Worker or GPU computation. A Worker is a later option if fixed-step updates cause main-thread input lag; GPU simulation is a later option only if profiling justifies its complexity.
 
@@ -78,7 +78,7 @@ When the world is playable, remove the generic “World gameplay in development�
 ## Coding order and release slices
 
 1. **Simulation proof:** Build the fixed-step central-attractor module and all three deterministic presets independently of Three.js. Unit-test stable, capture, escape, pause, and reset outcomes.
-2. **Visual slice:** Replace the Event Horizon placeholder with a seeded orbital preview using one particle batch and procedural core. Verify repeated entry and exit leave one canvas and no growing GPU resource count.
+2. **Visual slice:** Replace the Event Horizon placeholder with a seeded orbital preview using one particle batch and procedural black-hole artwork. Verify repeated entry and exit leave one canvas and no growing GPU resource count.
 3. **Playable slice:** Add Start, Launch, Gravity, Speed, Pause, Reset, camera controls, keyboard/touch equivalents, and reduced-motion behavior through a scoped planet input context. Keep project links visible while playing and use the existing static/no-WebGL portfolio fallback.
 4. **Portfolio discovery and release checks:** Add the homepage CTA, PLAYABLE manifest row, archive action, direct-route metadata, and a small “original versus browser adaptation” panel. Check `/worlds/event-horizon/` refreshes, test the mobile layout, and measure/tune the first device-tier particle budgets.
 5. **Optional polish:** Add the 10-second orbit challenge, richer feedback, shareable preset URLs, and sound-off-by-default effects if desired.
