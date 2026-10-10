@@ -1127,7 +1127,7 @@ a { color: inherit; }
   .waypoint-indicator { top: 75px; }
 }
 
-/* BitRoom arrival: a short binary tunnel that resolves into a real 8 × 8 bit grid. */
+/* BitRoom arrival: the ship falls through a 0/1 light corridor into a 64-bit room. */
 .bitroom-portal {
   --bitroom-glow: #d6dc52;
   position: fixed;
@@ -1137,10 +1137,11 @@ a { color: inherit; }
   place-items: center;
   overflow: hidden;
   isolation: isolate;
-  background: #020708;
+  background: #02070d;
   color: #f1f3d7;
   pointer-events: auto;
 }
+.bitroom-portal[hidden] { display: none; }
 .bitroom-portal.is-active { animation: bitroom-portal-veil 2s linear both; }
 .bitroom-portal-sr-only {
   position: absolute;
@@ -1153,78 +1154,163 @@ a { color: inherit; }
 .bitroom-portal-artwork { position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; }
 .bitroom-portal-field {
   position: absolute;
-  inset: -10%;
+  inset: -12%;
+  z-index: 0;
   background:
-    radial-gradient(circle at 50% 50%, rgba(214, 220, 82, .11) 0, transparent 28%),
-    repeating-linear-gradient(0deg, transparent 0 35px, rgba(214, 220, 82, .035) 36px),
-    repeating-linear-gradient(90deg, transparent 0 35px, rgba(214, 220, 82, .035) 36px),
-    radial-gradient(circle at center, #0b1515, #020708 72%);
-  opacity: .9;
-  transform: scale(1.08);
-  animation: bitroom-field-pull 2s ease-in both;
+    radial-gradient(circle at 8% 18%, #d2f4ff 0 1px, transparent 2px),
+    radial-gradient(circle at 22% 77%, #bdcfe7 0 1px, transparent 2px),
+    radial-gradient(circle at 35% 30%, #f5e4bb 0 1px, transparent 2px),
+    radial-gradient(circle at 69% 16%, #a7d8ed 0 1px, transparent 2px),
+    radial-gradient(circle at 81% 73%, #e7c8e5 0 1px, transparent 2px),
+    radial-gradient(circle at 94% 39%, #b8e9ef 0 1px, transparent 2px),
+    radial-gradient(circle at center, #101c2a 0, #040a14 48%, #010308 100%);
 }
+.bitroom-portal.is-active .bitroom-portal-field { animation: bitroom-space-recedes 2s ease-in both; }
 .bitroom-portal-heading,
 .bitroom-portal-caption {
   position: absolute;
-  z-index: 4;
+  z-index: 5;
   left: 50%;
   width: max-content;
   max-width: calc(100vw - 32px);
-  color: var(--bitroom-glow);
+  color: #dbebc0;
   font: 600 clamp(10px, 1.5vw, 12px)/1.4 'IBM Plex Mono', Consolas, monospace;
-  letter-spacing: .18em;
+  letter-spacing: .16em;
   text-align: center;
+  text-shadow: 0 0 14px rgba(15, 35, 39, .95);
   transform: translateX(-50%);
 }
 .bitroom-portal-heading { top: max(8dvh, 20px); }
-.bitroom-portal-caption { bottom: max(8dvh, 20px); color: #cbd2a6; }
-.bitroom-portal-tunnel { position: absolute; inset: 0; display: grid; place-items: center; perspective: 800px; }
-.bitroom-portal-aperture {
-  width: min(28vmin, 240px);
-  aspect-ratio: 1;
-  border: 1px solid rgba(214, 220, 82, .75);
-  border-radius: 50%;
-  background: radial-gradient(circle, #010505 0 36%, #162321 60%, rgba(214, 220, 82, .19) 68%, transparent 71%);
-  box-shadow: 0 0 30px rgba(214, 220, 82, .32), inset 0 0 25px rgba(214, 220, 82, .28);
-  animation: bitroom-aperture 1.6s ease-in both;
+.bitroom-portal-caption { bottom: max(8dvh, 20px); color: #c9d5d1; }
+.bitroom-portal.is-active :is(.bitroom-portal-heading, .bitroom-portal-caption) {
+  animation: bitroom-tunnel-labels 2s linear both;
 }
-.bitroom-portal-ring {
+.bitroom-portal-tunnel {
   position: absolute;
-  width: min(32vmin, 275px);
-  aspect-ratio: 1;
-  border: 2px solid rgba(214, 220, 82, .6);
-  border-radius: 50%;
-  box-shadow: 0 0 17px rgba(214, 220, 82, .48), inset 0 0 13px rgba(214, 220, 82, .26);
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
   opacity: 0;
-  animation: bitroom-ring-depth 1.35s cubic-bezier(.17, .58, .28, 1) both;
-  animation-delay: calc(var(--ring-index) * 130ms);
+  background: radial-gradient(circle at center, rgba(255, 239, 204, .28) 0, rgba(99, 206, 224, .07) 11%, transparent 34%);
 }
-.bitroom-portal-ring:nth-of-type(even) { border-style: dashed; }
-.bitroom-portal-codes { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; overflow: hidden; }
+.bitroom-portal-tunnel::before {
+  content: '';
+  position: absolute;
+  inset: -55%;
+  background: conic-gradient(
+    from 13deg,
+    rgba(128, 229, 232, .2),
+    rgba(125, 184, 236, .04) 17%,
+    rgba(234, 155, 222, .2) 32%,
+    rgba(253, 223, 159, .05) 49%,
+    rgba(156, 234, 217, .19) 68%,
+    rgba(219, 173, 231, .06) 84%,
+    rgba(128, 229, 232, .2)
+  );
+  mask-image: radial-gradient(circle at center, transparent 3%, #000 17%, #000 47%, transparent 74%);
+  filter: blur(24px);
+  opacity: .65;
+}
+.bitroom-portal.is-active .bitroom-portal-tunnel { animation: bitroom-tunnel-stage 2s ease-in-out both; }
+.bitroom-portal-ribbons,
+.bitroom-portal-streaks,
+.bitroom-portal-codes { position: absolute; inset: 0; }
+.bitroom-portal-ribbon,
+.bitroom-portal-streak,
 .bitroom-portal-code {
   position: absolute;
-  color: #f6f8bc;
-  font: 600 clamp(18px, 4.5vw, 48px)/1 'IBM Plex Mono', Consolas, monospace;
-  letter-spacing: .17em;
-  text-shadow: 0 0 13px rgba(214, 220, 82, .8), 0 0 33px rgba(214, 220, 82, .38);
+  top: 50%;
+  left: 50%;
+  transform-origin: left center;
+}
+.bitroom-portal-ribbon {
+  width: 74vmax;
+  height: var(--thickness);
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent 0, var(--tone) 22%, rgba(255,255,255,.65) 37%, var(--tone) 63%, transparent 100%);
+  filter: blur(15px);
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+.bitroom-portal.is-active .bitroom-portal-ribbon {
+  animation: bitroom-ribbon-flight 1450ms ease-in infinite;
+  animation-delay: var(--delay);
+}
+.bitroom-portal-streak {
+  width: 42vmax;
+  height: var(--thickness);
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.95) 18%, var(--tone) 43%, var(--tone) 75%, transparent);
+  box-shadow: 0 0 9px var(--tone);
+  opacity: 0;
+}
+.bitroom-portal.is-active .bitroom-portal-streak {
+  animation: bitroom-streak-flight var(--duration) linear infinite;
+  animation-delay: var(--delay);
+}
+.bitroom-portal-codes { z-index: 2; }
+.bitroom-portal-code {
+  color: #f0f7db;
+  font: 700 clamp(11px, 1.7vmin, 19px)/1 'IBM Plex Mono', Consolas, monospace;
+  letter-spacing: .16em;
+  text-shadow: 0 0 8px #cbe788, 0 0 21px rgba(103, 236, 233, .75);
   white-space: nowrap;
   opacity: 0;
-  animation: bitroom-code-flight 1.25s ease-in both;
-  animation-delay: calc(var(--code-index) * 145ms + 170ms);
 }
-.bitroom-portal-code:first-child { --code-offset: -18vh; }
-.bitroom-portal-code:nth-child(2) { --code-offset: 0px; }
-.bitroom-portal-code:last-child { --code-offset: 18vh; }
+.bitroom-portal.is-active .bitroom-portal-code {
+  animation: bitroom-binary-flight 1180ms linear infinite;
+  animation-delay: var(--delay);
+}
+.bitroom-portal-core {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(20vmin, 210px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fffdf0 0, #fff6cd 5%, rgba(255, 221, 173, .85) 11%, rgba(106, 226, 233, .36) 31%, transparent 69%);
+  box-shadow: 0 0 70px 18px rgba(134, 221, 228, .25);
+  transform: translate(-50%, -50%);
+}
+.bitroom-portal.is-active .bitroom-portal-core { animation: bitroom-core-pulse 2s ease-in both; }
+.bitroom-portal-ship {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  width: clamp(78px, 15vmin, 160px);
+  aspect-ratio: 1.3;
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgba(142, 235, 248, .9)) drop-shadow(0 0 18px rgba(110, 218, 234, .55));
+}
+.bitroom-portal.is-active .bitroom-portal-ship { animation: bitroom-ship-dive 1180ms cubic-bezier(.2,.38,.3,1) both; }
+.bitroom-portal-ship-hull {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(50% 0, 59% 45%, 96% 76%, 100% 91%, 63% 78%, 59% 100%, 41% 100%, 37% 78%, 0 91%, 4% 76%, 41% 45%);
+  background: linear-gradient(180deg, #0d1a27 8%, #01060b 64%, #112638);
+}
+.bitroom-portal-ship-engine {
+  position: absolute;
+  bottom: 0;
+  width: 7%;
+  height: 16%;
+  border-radius: 45% 45% 70% 70%;
+  background: #93f4ff;
+  box-shadow: 0 0 9px #a6f9ff, 0 0 19px #5bbad8;
+}
+.bitroom-portal-ship-engine.is-left { left: 42%; }
+.bitroom-portal-ship-engine.is-right { right: 42%; }
 .bitroom-portal-board {
   position: relative;
-  z-index: 3;
+  z-index: 4;
   display: grid;
   justify-items: center;
   gap: clamp(9px, 1.8vmin, 17px);
   padding: 18px;
   opacity: 0;
-  animation: bitroom-board-resolve 2s ease-out both;
 }
+.bitroom-portal.is-active .bitroom-portal-board { animation: bitroom-board-resolve 2s ease-out both; }
 .bitroom-portal-board-label,
 .bitroom-portal-board-footer {
   color: #e7eb9c;
@@ -1252,43 +1338,74 @@ a { color: inherit; }
 }
 @keyframes bitroom-portal-veil {
   0% { opacity: 0; }
-  8%, 100% { opacity: 1; }
+  7%, 100% { opacity: 1; }
 }
-@keyframes bitroom-field-pull {
-  0% { transform: scale(1.08); }
-  75%, 100% { transform: scale(1.9); }
+@keyframes bitroom-space-recedes {
+  0%, 12% { opacity: 1; transform: scale(1); }
+  38% { opacity: .6; transform: scale(1.25); }
+  65%, 100% { opacity: .12; transform: scale(2.3); }
 }
-@keyframes bitroom-aperture {
-  0% { opacity: 0; transform: scale(.2); }
+@keyframes bitroom-tunnel-labels {
+  0%, 13% { opacity: 0; }
+  21%, 66% { opacity: .86; }
+  81%, 100% { opacity: 0; }
+}
+@keyframes bitroom-tunnel-stage {
+  0%, 8% { opacity: 0; }
+  20% { opacity: .94; }
+  32%, 67% { opacity: 1; }
+  77% { opacity: .72; }
+  88%, 100% { opacity: 0; }
+}
+@keyframes bitroom-ribbon-flight {
+  0% { opacity: 0; transform: rotate(var(--angle)) translateX(1vmax) scaleX(.05); }
+  17% { opacity: .32; }
+  55% { opacity: .23; transform: rotate(var(--angle)) translateX(24vmax) scaleX(1.1); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(80vmax) scaleX(1.8); }
+}
+@keyframes bitroom-streak-flight {
+  0% { opacity: 0; transform: rotate(var(--angle)) translateX(2vmax) scaleX(.05); filter: blur(1px); }
+  13% { opacity: .88; }
+  58% { opacity: 1; transform: rotate(var(--angle)) translateX(26vmax) scaleX(1.18); filter: blur(0); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(82vmax) scaleX(2.2); filter: blur(3px); }
+}
+@keyframes bitroom-binary-flight {
+  0% { opacity: 0; transform: rotate(var(--angle)) translateX(6vmax) scale(.18); filter: blur(2px); }
+  23% { opacity: .86; filter: blur(0); }
+  53% { opacity: .95; transform: rotate(var(--angle)) translateX(26vmax) scale(.8); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(78vmax) scale(2.2); filter: blur(4px); }
+}
+@keyframes bitroom-core-pulse {
+  0%, 9% { opacity: 0; transform: translate(-50%, -50%) scale(.5); }
+  25%, 68% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  79% { opacity: 1; transform: translate(-50%, -50%) scale(2.2); }
+  92%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(4); }
+}
+@keyframes bitroom-ship-dive {
+  0% { opacity: 0; transform: translate(-50%, calc(-50% + 33vh)) scale(1.55) rotate(-8deg); }
   12% { opacity: 1; }
-  75% { opacity: 1; transform: scale(2.5); }
-  100% { opacity: 0; transform: scale(4); }
-}
-@keyframes bitroom-ring-depth {
-  0% { opacity: 0; transform: scale(.13) rotate(-22deg); }
-  20% { opacity: .8; }
-  70% { opacity: .55; }
-  100% { opacity: 0; transform: scale(5) rotate(16deg); }
-}
-@keyframes bitroom-code-flight {
-  0% { opacity: 0; transform: translateY(var(--code-offset)) scale(.25); filter: blur(5px); }
-  25% { opacity: .8; filter: blur(0); }
-  57% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(0) scale(3.7); filter: blur(5px); }
+  50% { opacity: 1; transform: translate(-50%, calc(-50% + 7vh)) scale(.78) rotate(-2deg); }
+  78% { opacity: 1; transform: translate(-50%, -50%) scale(.24) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(.05) rotate(0); }
 }
 @keyframes bitroom-board-resolve {
-  0%, 70% { opacity: 0; transform: scale(.7); }
-  83%, 100% { opacity: 1; transform: scale(1); }
+  0%, 75% { opacity: 0; transform: scale(.66); filter: blur(7px); }
+  88% { opacity: 1; transform: scale(1.035); filter: blur(0); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 @media (max-width: 680px) {
-  .bitroom-portal-heading, .bitroom-portal-caption { letter-spacing: .09em; }
-  .bitroom-portal-code { letter-spacing: .1em; }
+  .bitroom-portal-heading, .bitroom-portal-caption { letter-spacing: .08em; }
+  .bitroom-portal-streak:nth-child(n+41) { display: none; }
+  .bitroom-portal-code { font-size: 10px; letter-spacing: .06em; }
+  .bitroom-portal-ribbon { filter: blur(10px); }
 }
 .bitroom-portal.is-reduced.is-active { opacity: 1; animation: none; }
-.bitroom-portal.is-reduced :is(.bitroom-portal-tunnel, .bitroom-portal-codes) { display: none; }
-.bitroom-portal.is-reduced :is(.bitroom-portal-field, .bitroom-portal-board) { opacity: 1; transform: none; animation: none; }
+.bitroom-portal.is-reduced :is(.bitroom-portal-tunnel, .bitroom-portal-ship) { display: none; }
+.bitroom-portal.is-reduced :is(.bitroom-portal-field, .bitroom-portal-board) { opacity: 1; transform: none; filter: none; animation: none; }
+.bitroom-portal.is-reduced :is(.bitroom-portal-heading, .bitroom-portal-caption) { opacity: 1; animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .bitroom-portal.is-active { opacity: 1; animation: none !important; }
-  .bitroom-portal :is(.bitroom-portal-tunnel, .bitroom-portal-codes) { display: none; }
-  .bitroom-portal :is(.bitroom-portal-field, .bitroom-portal-board) { opacity: 1; transform: none; animation: none !important; }
+  .bitroom-portal :is(.bitroom-portal-tunnel, .bitroom-portal-ship) { display: none; }
+  .bitroom-portal :is(.bitroom-portal-field, .bitroom-portal-board) { opacity: 1; transform: none; filter: none; animation: none !important; }
+  .bitroom-portal :is(.bitroom-portal-heading, .bitroom-portal-caption) { opacity: 1; animation: none !important; }
 }
