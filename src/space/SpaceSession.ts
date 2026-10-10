@@ -4,6 +4,7 @@ import { ShipController, type ShipActions } from './ShipController.ts'
 import { createSpaceToonMaterial } from './SpaceToonShader.ts'
 import { OrbitSystem } from './OrbitSystem.ts'
 import { createPlanetMotif, type PlanetMotif } from './PlanetMotifs.ts'
+import { BlackHoleVisual } from '../worlds/solar-dots/BlackHoleVisual.ts'
 import {
   differenceSpacePosition,
   distanceBetweenSpacePositions,
@@ -42,7 +43,7 @@ export class SpaceSession {
   private readonly thrusterGlows: THREE.Mesh[] = []
   private readonly planets: PlanetProxy[] = []
   private readonly orbitTracks: OrbitTrack[] = []
-  private readonly systemStar: THREE.Group
+  private readonly blackHole: BlackHoleVisual
   private readonly starDome: THREE.Points
   private readonly nearbyStars: THREE.Points
   private readonly outlineMaterial = new THREE.MeshBasicMaterial({
@@ -91,8 +92,10 @@ export class SpaceSession {
     )
     this.scene.add(this.starDome, this.nearbyStars)
 
-    this.systemStar = createSystemStar(this.outlineMaterial)
-    this.scene.add(this.systemStar)
+    this.blackHole = new BlackHoleVisual()
+    // The glow ends within the first orbit (260 units), leaving a visible gap.
+    this.blackHole.group.scale.setScalar(18)
+    this.scene.add(this.blackHole.group)
 
     definitions.forEach(definition => {
       const motif = createPlanetMotif(definition)
@@ -205,6 +208,8 @@ export class SpaceSession {
       this.scene.remove(proxy.motif.group)
       proxy.motif.dispose()
     })
+    this.scene.remove(this.blackHole.group)
+    this.blackHole.dispose()
     const geometries = new Set<THREE.BufferGeometry>()
     const materials = new Set<THREE.Material>()
     this.scene.traverse(object => {
@@ -241,15 +246,15 @@ export class SpaceSession {
 
     this.starDome.position.copy(this.camera.position)
     this.updateNearbyStars()
-    this.updateSystemStar(dt)
+    this.updateSystemCenter()
     this.updatePlanets()
     this.updateTrackVisibility()
   }
 
-  private updateSystemStar(dt: number): void {
-    this.systemStar.position.set(...differenceSpacePosition(this.controller.position, this.orbits.getCenter()))
-    if (!this.reducedMotion) this.systemStar.rotation.y += dt * 0.04
-    for (const track of this.orbitTracks) track.line.position.copy(this.systemStar.position)
+  private updateSystemCenter(): void {
+    this.blackHole.group.position.set(...differenceSpacePosition(this.controller.position, this.orbits.getCenter()))
+    this.blackHole.update(this.orbits.getElapsedSeconds(), this.camera)
+    for (const track of this.orbitTracks) track.line.position.copy(this.blackHole.group.position)
   }
 
   private updatePlanets(): void {
@@ -468,46 +473,6 @@ function buildNearbyStarGeometry(center: readonly number[]): THREE.BufferGeometr
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
   return geometry
-}
-
-function createSystemStar(outlineMaterial: THREE.Material): THREE.Group {
-  const group = new THREE.Group()
-  group.name = 'System Zero core — navigation hub'
-
-  const core = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(53, 2),
-    createSpaceToonMaterial({
-      base: 0xffba54,
-      shadow: 0x99522f,
-      highlight: 0xffeea4,
-      outline: 0x2c1634,
-    }),
-  )
-  addBackfaceOutline(core, outlineMaterial, 0.055)
-  group.add(core)
-
-  const facets = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(56.5, 1),
-    new THREE.MeshBasicMaterial({ color: 0xffe0a2, wireframe: true, transparent: true, opacity: 0.35, depthWrite: false }),
-  )
-  facets.rotation.set(0.2, 0.6, 0.4)
-  group.add(facets)
-
-  for (const angle of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
-    const halo = new THREE.Mesh(
-      new THREE.TorusGeometry(77, 0.9, 4, 80),
-      new THREE.MeshBasicMaterial({ color: 0xffc476, transparent: true, opacity: 0.32, depthWrite: false }),
-    )
-    halo.rotation.set(1.24, angle, angle * 0.28)
-    group.add(halo)
-  }
-
-  const corona = new THREE.Mesh(
-    new THREE.SphereGeometry(66, 24, 12),
-    new THREE.MeshBasicMaterial({ color: 0xf5a94e, transparent: true, opacity: 0.08, depthWrite: false, side: THREE.BackSide }),
-  )
-  group.add(corona)
-  return group
 }
 
 function createOrbitTrack(orbits: OrbitSystem, definition: PlanetDefinition): THREE.LineLoop {

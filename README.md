@@ -1,6 +1,6 @@
 # System Zero
 
-A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Pilot a procedural ship around System Zero, a portfolio star with nine project worlds on moving orbits. Open the System map to see their current positions, choose a destination, and warp or fly there. [Solar DOTS](https://bindo56.github.io/worlds/event-horizon/) is the first playable world; the other landings present the original projects while their games are built.
+A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Pilot a procedural ship around System Zero, where nine project worlds orbit a stylized black-hole centerpiece. Its dark shadow, warm accretion disk, and single upper light arc echo the Solar DOTS world; the background stars remain. Open the System map to see the worlds' current positions, choose a destination, and warp or fly there. [Solar DOTS](https://bindo56.github.io/worlds/event-horizon/) is the first playable world; the other landings present the original projects while their games are built.
 
 ## Run locally
 
@@ -46,7 +46,7 @@ In Solar DOTS, choose Orbit, Plunge, or Escape; tune gravity, launch speed, and 
 - Paths under /worlds/ for voxel, npc-ecs, stretch-squash, drone-fleet, event-horizon, warfront, bitboard, pixel-farm, and material-forge are refreshable static Pages entries. Vite emits one HTML entry per path. In-app navigation uses browser history and keeps one canvas alive.
 - src/app/AppShell.ts owns the renderer, frame loop, interface theme, route transition, portfolio UI, and no-WebGL fallback. Space and landing scenes always use dark backgrounds.
 - src/app/InputActions.ts separates space, planet, and dialog input. src/app/PlanetLoader.ts keeps only one prepared landing and drops superseded loads.
-- src/space/SpacePosition.ts rebases 4,096-unit sectors. src/space/OrbitSystem.ts is the shared clock and position source for rendering, the System map, approach distances, warp, and exit. src/space/SpaceSession.ts owns the ship, chase camera, central star, orbit tracks, and deterministic stars. src/space/PlanetMotifs.ts provides the nine procedural silhouettes and animations, including Elastic Foundry's deforming sphere and outline.
+- src/space/SpacePosition.ts rebases 4,096-unit sectors. src/space/OrbitSystem.ts is the shared clock and position source for rendering, the System map, approach distances, warp, and exit. src/space/SpaceSession.ts owns the ship, chase camera, black-hole centerpiece, orbit tracks, and deterministic background stars. src/space/PlanetMotifs.ts provides the nine procedural silhouettes and animations, including Elastic Foundry's deforming sphere and outline.
 - src/ui/SystemMap.ts draws the top-down chart from live orbit positions and provides keyboard-accessible selection, warp, and world links.
 - src/worlds/registry.ts is the typed source of nine slugs, orbit definitions, initial positions, appearances, project keys, and lazy imports. Every world uses the prepare → mount → update → dispose contract in src/app/PlanetContracts.ts.
 

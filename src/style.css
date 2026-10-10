@@ -989,16 +989,35 @@ a { color: inherit; }
   left: 50%;
   display: grid;
   place-items: center;
-  width: 62px;
-  height: 62px;
-  border: 1px solid #f6b866;
-  border-radius: 50%;
-  background: #a5552a;
-  box-shadow: 0 0 0 8px rgba(244,178,96,.09), 0 0 32px rgba(244,178,96,.55);
+  width: 70px;
+  height: 70px;
   color: #fff5dd;
   transform: translate(-50%, -50%);
 }
-.system-map-core-symbol { font: 700 16px 'IBM Plex Mono', Consolas, monospace; }
+.system-map-core::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: 7px;
+  width: 52px;
+  height: 27px;
+  border: 2px solid #ffd08b;
+  border-bottom: 0;
+  border-radius: 52px 52px 0 0;
+  background: #02070d;
+  box-shadow: 0 -5px 18px rgba(244,178,96,.42);
+}
+.system-map-core::after {
+  content: '';
+  position: absolute;
+  top: 41px;
+  left: -4px;
+  width: 78px;
+  height: 4px;
+  background: linear-gradient(90deg, transparent, #b65b2b 12%, #fff2ca 50%, #b65b2b 88%, transparent);
+  box-shadow: 0 0 11px rgba(255,172,78,.8);
+}
+.system-map-core-symbol { position: relative; z-index: 1; margin-top: -12px; font: 700 13px 'IBM Plex Mono', Consolas, monospace; }
 .system-map-core-label {
   position: absolute;
   top: calc(100% + 10px);

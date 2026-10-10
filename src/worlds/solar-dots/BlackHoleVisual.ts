@@ -14,6 +14,9 @@ export class BlackHoleVisual {
   private readonly shadowMask: THREE.Mesh
   private readonly lens: THREE.Mesh
   private readonly cameraDirection = new THREE.Vector3()
+  private readonly cameraPosition = new THREE.Vector3()
+  private readonly worldPosition = new THREE.Vector3()
+  private readonly cameraRotation = new THREE.Quaternion()
   private readonly geometries: THREE.BufferGeometry[] = []
   private readonly materials: THREE.Material[] = []
 
@@ -161,10 +164,15 @@ export class BlackHoleVisual {
   update(time: number, camera: THREE.Camera): void {
     this.diskMaterial.uniforms.uTime.value = time
     this.lensMaterial.uniforms.uTime.value = time
-    this.cameraDirection.copy(camera.position).normalize()
+    camera.getWorldPosition(this.cameraPosition)
+    this.group.getWorldPosition(this.worldPosition)
+    this.cameraDirection.copy(this.cameraPosition).sub(this.worldPosition)
+    if (this.cameraDirection.lengthSq() > 0) this.cameraDirection.normalize()
+    else this.cameraDirection.set(0, 0, 1)
     this.lensMaterial.uniforms.uEdgeOn.value = 1 - Math.abs(this.cameraDirection.y)
-    this.shadowMask.quaternion.copy(camera.quaternion)
-    this.lens.quaternion.copy(camera.quaternion)
+    camera.getWorldQuaternion(this.cameraRotation)
+    this.shadowMask.quaternion.copy(this.cameraRotation)
+    this.lens.quaternion.copy(this.cameraRotation)
   }
 
   dispose(): void {

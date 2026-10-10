@@ -41,7 +41,7 @@ export class SystemMap {
     this.selected = planets[0]
     this.maxRadius = Math.max(...planets.map(planet => planet.orbit.radius))
     this.element.hidden = true
-    this.element.setAttribute('aria-label', 'System Zero solar system map')
+    this.element.setAttribute('aria-label', 'System Zero orbit map with nine project worlds around a central black hole')
     this.element.setAttribute('role', 'dialog')
     this.element.setAttribute('aria-modal', 'false')
     this.closeButton.type = 'button'
@@ -115,7 +115,9 @@ export class SystemMap {
     }
     field.append(orbitSvg)
     const core = element('div', 'system-map-core')
-    core.append(element('span', 'system-map-core-symbol', 'S/0'), element('span', 'system-map-core-label', 'SYSTEM ZERO'))
+    core.setAttribute('role', 'img')
+    core.setAttribute('aria-label', 'Central black hole')
+    core.append(element('span', 'system-map-core-symbol', 'S/0'), element('span', 'system-map-core-label', 'BLACK HOLE'))
     field.append(core)
     this.planets.forEach((planet, index) => {
       const button = element('button', `system-map-marker group-${planet.orbit.group}`)
