@@ -28,11 +28,12 @@ interface Fighter {
 
 interface Shot {
   mesh: THREE.Mesh
-  direction: THREE.Vector3
-  speed: number
+  trail: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
+  trailPoints: THREE.Vector3[]
+  velocity: THREE.Vector3
   life: number
   rocket: boolean
-  target: Fighter | null
+  team: Team
 }
 
 interface BattleZone {
@@ -88,6 +89,7 @@ export class WarfrontVisual {
   private selected: Fighter | null = null
   private weapon: Weapon = 'rifle'
   private heading = 0
+  private pitch = -0.12
   private moveForward = 0
   private moveStrafe = 0
   private turnSpeed = 0
@@ -165,6 +167,7 @@ export class WarfrontVisual {
     const fighter = this.fighters[Math.floor(Math.random() * this.fighters.length)]
     this.selected = fighter
     this.heading = fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
+    this.pitch = -0.12
     this.weapon = 'rifle'
     this.nextShot = 0
     this.firing = false
@@ -211,7 +214,11 @@ export class WarfrontVisual {
     this.turnSpeed = THREE.MathUtils.clamp(turn, -1, 1)
   }
 
-  aim(deltaX: number): void { if (this.selected) this.heading -= deltaX * 0.006 }
+  aim(deltaX: number, deltaY: number): void {
+    if (!this.selected) return
+    this.heading -= deltaX * 0.0035
+    this.pitch = THREE.MathUtils.clamp(this.pitch - deltaY * 0.0028, -0.55, 0.45)
+  }
   jump(): void { if (this.selected && this.hopTime <= 0) this.hopTime = 0.52 }
   equip(weapon: Weapon): void { this.weapon = weapon }
   setFiring(value: boolean): void { this.firing = value && this.selected !== null }
@@ -326,7 +333,7 @@ export class WarfrontVisual {
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
     const worldForward = forward.applyQuaternion(this.playerAnchor.quaternion)
-    const target = normal.clone().multiplyScalar(PLANET_RADIUS + 0.19).addScaledVector(worldForward, 0.39)
+    const aimDirection = worldForward.clone().addScaledVector(normal, this.pitch).normalize()
     const desired = normal.clone().multiplyScalar(PLANET_RADIUS + 0.48).addScaledVector(worldForward, -0.72)
     desired.addScaledVector(right.applyQuaternion(this.playerAnchor.quaternion), 0.14)
     if (this.entryProgress < 1) {
@@ -335,7 +342,7 @@ export class WarfrontVisual {
       this.camera.position.copy(this.entryCamera).lerp(desired, t)
     } else this.camera.position.lerp(desired, this.reducedMotion ? 1 : 1 - Math.exp(-9 * frame))
     this.camera.up.copy(normal)
-    this.camera.lookAt(target)
+    this.camera.lookAt(this.camera.position.clone().add(aimDirection))
     if (this.firing && this.elapsed >= this.nextShot) this.fire()
   }
 
@@ -348,21 +355,9 @@ export class WarfrontVisual {
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
     const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)).applyQuaternion(this.playerAnchor.quaternion)
-    const start = normal.clone().multiplyScalar(PLANET_RADIUS + 0.16).addScaledVector(forward, 0.17)
-    let target: Fighter | null = null
-    let best = rocket ? 1.9 : 1.25
-    for (const enemy of this.fighters) {
-      if (enemy.team === fighter.team || enemy === fighter || !enemy.zone.visible) continue
-      const position = enemy.root.getWorldPosition(new THREE.Vector3())
-      const to = position.sub(start)
-      const range = to.length()
-      if (range > best || to.normalize().dot(forward) < (rocket ? 0.78 : 0.91)) continue
-      best = range
-      target = enemy
-    }
-    const direction = target
-      ? target.root.getWorldPosition(new THREE.Vector3()).sub(start).normalize()
-      : forward.clone().addScaledVector(normal, 0.035).normalize()
+    const start = normal.clone().multiplyScalar(PLANET_RADIUS + 0.18).addScaledVector(forward, 0.17)
+    const direction = forward.addScaledVector(normal, this.pitch).normalize()
+    const velocity = direction.clone().multiplyScalar(rocket ? 3.4 : 5.1)
     const mesh = new THREE.Mesh(
       rocket ? new THREE.ConeGeometry(0.025, 0.085, 6) : new THREE.BoxGeometry(0.009, 0.009, 0.07),
       new THREE.MeshBasicMaterial({ color: rocket ? 0xffa34c : fighter.team === 'blue' ? 0xa7ecff : 0xffb0a0, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -370,21 +365,70 @@ export class WarfrontVisual {
     mesh.position.copy(start)
     mesh.quaternion.setFromUnitVectors(rocket ? UP : FORWARD, direction)
     this.scene.add(mesh)
-    this.shots.push({ mesh, direction, speed: rocket ? 2.4 : 6.5, life: rocket ? 0.9 : 0.28, rocket, target })
+    const trailGeometry = new THREE.BufferGeometry()
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(14 * 3), 3))
+    trailGeometry.setDrawRange(0, 1)
+    const trail = new THREE.Line(trailGeometry, new THREE.LineBasicMaterial({
+      color: rocket ? 0xff8d4c : fighter.team === 'blue' ? 0x87e5ff : 0xff9a86,
+      transparent: true, opacity: 0.72, blending: THREE.AdditiveBlending, depthWrite: false,
+    }))
+    trail.frustumCulled = false
+    this.scene.add(trail)
+    this.shots.push({ mesh, trail, trailPoints: [start.clone()], velocity, life: rocket ? 2.1 : 1.3, rocket, team: fighter.team })
   }
 
   private updateShots(frame: number): void {
     for (let index = this.shots.length - 1; index >= 0; index--) {
       const shot = this.shots[index]
       shot.life -= frame
-      shot.mesh.position.addScaledVector(shot.direction, frame * shot.speed)
-      const hit = shot.target && shot.mesh.position.distanceTo(shot.target.root.getWorldPosition(this.tempEnd)) < (shot.rocket ? 0.09 : 0.055)
-      if (shot.life > 0 && !hit && shot.mesh.position.length() > PLANET_RADIUS - 0.02) continue
-      if (hit && shot.target) shot.target.stunnedUntil = this.elapsed + (shot.rocket ? 1.4 : 0.24)
-      if (shot.rocket || hit) this.addImpact(shot.mesh.position, shot.rocket)
+      let impact = false
+      const steps = Math.max(1, Math.ceil(frame / 0.016))
+      const step = frame / steps
+      for (let substep = 0; substep < steps && !impact; substep++) {
+        const previous = shot.mesh.position.clone()
+        const gravity = previous.clone().normalize().multiplyScalar(shot.rocket ? -3.7 : -8.1)
+        shot.velocity.addScaledVector(gravity, step)
+        const next = previous.clone().addScaledVector(shot.velocity, step)
+        const segment = this.tempDirection.copy(next).sub(previous)
+        const segmentLength = Math.max(segment.lengthSq(), 0.000001)
+        for (const enemy of this.fighters) {
+          if (enemy.team === shot.team || enemy === this.selected || !enemy.zone.visible) continue
+          const position = enemy.root.getWorldPosition(this.tempEnd)
+          const along = THREE.MathUtils.clamp(((position.x - previous.x) * segment.x + (position.y - previous.y) * segment.y + (position.z - previous.z) * segment.z) / segmentLength, 0, 1)
+          this.tempStart.copy(previous).addScaledVector(segment, along)
+          if (this.tempStart.distanceToSquared(position) > (shot.rocket ? 0.1 : 0.06) ** 2) continue
+          shot.mesh.position.copy(this.tempStart)
+          enemy.stunnedUntil = this.elapsed + (shot.rocket ? 1.4 : 0.24)
+          impact = true
+          break
+        }
+        if (impact) break
+        const ground = PLANET_RADIUS + 0.015
+        if (next.lengthSq() <= ground * ground) {
+          const oldRadius = previous.length()
+          const newRadius = next.length()
+          const fraction = THREE.MathUtils.clamp((oldRadius - ground) / Math.max(oldRadius - newRadius, 0.000001), 0, 1)
+          shot.mesh.position.copy(previous).lerp(next, fraction)
+          impact = true
+          break
+        }
+        shot.mesh.position.copy(next)
+        shot.mesh.quaternion.setFromUnitVectors(shot.rocket ? UP : FORWARD, shot.velocity.clone().normalize())
+      }
+      shot.trailPoints.push(shot.mesh.position.clone())
+      if (shot.trailPoints.length > 14) shot.trailPoints.shift()
+      const trailPositions = shot.trail.geometry.getAttribute('position') as THREE.BufferAttribute
+      shot.trailPoints.forEach((point, pointIndex) => trailPositions.setXYZ(pointIndex, point.x, point.y, point.z))
+      trailPositions.needsUpdate = true
+      shot.trail.geometry.setDrawRange(0, shot.trailPoints.length)
+      if (!impact && shot.life > 0 && shot.mesh.position.lengthSq() < 18 * 18) continue
+      if (impact) this.addImpact(shot.mesh.position, shot.rocket)
       this.scene.remove(shot.mesh)
+      this.scene.remove(shot.trail)
       shot.mesh.geometry.dispose()
       ;(shot.mesh.material as THREE.Material).dispose()
+      shot.trail.geometry.dispose()
+      shot.trail.material.dispose()
       this.shots.splice(index, 1)
     }
     for (let index = this.impacts.length - 1; index >= 0; index--) {
@@ -415,7 +459,12 @@ export class WarfrontVisual {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const shot of this.shots) { shot.mesh.geometry.dispose(); (shot.mesh.material as THREE.Material).dispose() }
+    for (const shot of this.shots) {
+      shot.mesh.geometry.dispose()
+      ;(shot.mesh.material as THREE.Material).dispose()
+      shot.trail.geometry.dispose()
+      shot.trail.material.dispose()
+    }
     for (const impact of this.impacts) { impact.mesh.geometry.dispose(); impact.mesh.material.dispose() }
     this.shots.length = 0
     this.impacts.length = 0

@@ -69,6 +69,7 @@ const module: PlanetModule = {
       if (!host.isInteractive()) return
       visual.enterRandomSoldier()
       syncMode()
+      lockAim()
     })
     intro.append(jumpIn)
 
@@ -92,7 +93,7 @@ const module: PlanetModule = {
     const soldierHud = el('section', 'warfront-soldier-hud')
     const teamLabel = el('span', 'warfront-soldier-team')
     const weaponLabel = el('span', 'warfront-soldier-weapon')
-    const soldierHelp = el('p', '', 'WASD MOVE · DRAG AIM · CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT')
+    const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT')
     const weaponControls = el('div', 'warfront-soldier-actions')
     const rifle = el('button', 'warfront-button', '1  Assault rifle')
     const rocket = el('button', 'warfront-button', '2  Rocket launcher')
@@ -100,7 +101,7 @@ const module: PlanetModule = {
     for (const button of [rifle, rocket, leave]) button.type = 'button'
     rifle.addEventListener('click', () => { visual.equip('rifle'); syncMode() })
     rocket.addEventListener('click', () => { visual.equip('rocket'); syncMode() })
-    leave.addEventListener('click', () => { visual.leaveSoldier(); syncMode() })
+    leave.addEventListener('click', () => { releaseAim(); visual.leaveSoldier(); syncMode() })
     weaponControls.append(rifle, rocket, leave)
     soldierHud.append(teamLabel, weaponLabel, soldierHelp, weaponControls)
 
@@ -166,9 +167,26 @@ const module: PlanetModule = {
       weaponLabel.textContent = visual.currentWeapon === 'rifle' ? 'ASSAULT RIFLE · AUTO' : 'ROCKET LAUNCHER · HEAVY'
       rifle.classList.toggle('is-primary', visual.currentWeapon === 'rifle')
       rocket.classList.toggle('is-primary', visual.currentWeapon === 'rocket')
+      soldierHelp.textContent = document.pointerLockElement === host.canvas
+        ? 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT · ESC UNLOCK'
+        : 'CLICK BATTLE TO LOCK AIM · WASD MOVE · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT'
       if (!playing) { held.clear(); mouseFiring = false; visual.setFiring(false); visual.setMovement(0, 0, 0); updateZoom() }
     }
     updateZoom()
+
+    function lockAim(): void {
+      if (!visual.isPlaying || !host.isInteractive() || !window.matchMedia('(pointer: fine)').matches || document.pointerLockElement === host.canvas) return
+      try { void Promise.resolve(host.canvas.requestPointerLock()).catch(() => { syncMode() }) }
+      catch { syncMode() }
+    }
+    function releaseAim(): void {
+      if (document.pointerLockElement === host.canvas) document.exitPointerLock()
+    }
+    const pointerLockChange = (): void => {
+      if (document.pointerLockElement !== host.canvas) { mouseFiring = false; syncMovement() }
+      syncMode()
+    }
+    document.addEventListener('pointerlockchange', pointerLockChange)
 
     const keys = new Set<string>()
     function syncMovement(): void {
@@ -186,7 +204,7 @@ const module: PlanetModule = {
       if (event.code === 'Space' && !event.repeat) visual.jump()
       if (event.code === 'Digit1') { visual.equip('rifle'); syncMode() }
       if (event.code === 'Digit2') { visual.equip('rocket'); syncMode() }
-      if (event.code === 'KeyV') { visual.leaveSoldier(); syncMode(); return }
+      if (event.code === 'KeyV') { releaseAim(); visual.leaveSoldier(); syncMode(); return }
       keys.add(event.code)
       syncMovement()
     }
@@ -200,16 +218,24 @@ const module: PlanetModule = {
     const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y)
     const pointerDown = (event: PointerEvent): void => {
       if (!host.isInteractive()) return
+      if (visual.isPlaying && event.pointerType === 'mouse') {
+        if (document.pointerLockElement !== host.canvas) lockAim()
+        if (event.button === 0) { mouseFiring = true; syncMovement() }
+        return
+      }
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       host.canvas.setPointerCapture(event.pointerId)
-      if (visual.isPlaying && event.pointerType === 'mouse' && event.button === 0) { mouseFiring = true; syncMovement() }
     }
     const pointerMove = (event: PointerEvent): void => {
       if (!host.isInteractive()) return
+      if (visual.isPlaying && document.pointerLockElement === host.canvas) {
+        visual.aim(event.movementX, event.movementY)
+        return
+      }
       const previous = pointers.get(event.pointerId)
       if (!previous) return
       const current = { x: event.clientX, y: event.clientY }
-      if (visual.isPlaying) visual.aim(current.x - previous.x)
+      if (visual.isPlaying) visual.aim(current.x - previous.x, current.y - previous.y)
       else if (pointers.size === 1) visual.orbit(current.x - previous.x, current.y - previous.y)
       else if (pointers.size === 2) {
         const other = [...pointers.entries()].find(([id]) => id !== event.pointerId)?.[1]
@@ -218,9 +244,9 @@ const module: PlanetModule = {
       pointers.set(event.pointerId, current)
     }
     const pointerEnd = (event: PointerEvent): void => {
+      if (visual.isPlaying && event.pointerType === 'mouse') { mouseFiring = false; syncMovement(); return }
       pointers.delete(event.pointerId)
       if (host.canvas.hasPointerCapture(event.pointerId)) host.canvas.releasePointerCapture(event.pointerId)
-      if (visual.isPlaying && event.pointerType === 'mouse') { mouseFiring = false; syncMovement() }
     }
     const wheel = (event: WheelEvent): void => {
       if (!host.isInteractive()) return
@@ -228,28 +254,36 @@ const module: PlanetModule = {
       visual.zoom(event.deltaY)
       updateZoom()
     }
+    const contextMenu = (event: MouseEvent): void => { if (visual.isPlaying) event.preventDefault() }
+    const mouseUp = (): void => { if (mouseFiring) { mouseFiring = false; syncMovement() } }
     host.canvas.addEventListener('pointerdown', pointerDown)
     host.canvas.addEventListener('pointermove', pointerMove)
     host.canvas.addEventListener('pointerup', pointerEnd)
     host.canvas.addEventListener('pointercancel', pointerEnd)
     host.canvas.addEventListener('wheel', wheel, { passive: false })
+    host.canvas.addEventListener('contextmenu', contextMenu)
+    window.addEventListener('mouseup', mouseUp)
 
     let disposed = false
     return {
       scene: visual.scene,
       camera: visual.camera,
-      update(dt: number) { if (!host.isInteractive()) syncMovement(); visual.update(dt) },
+      update(dt: number) { if (!host.isInteractive()) { releaseAim(); syncMovement() } visual.update(dt) },
       dispose() {
         if (disposed) return
         disposed = true
+        releaseAim()
         host.canvas.removeEventListener('pointerdown', pointerDown)
         host.canvas.removeEventListener('pointermove', pointerMove)
         host.canvas.removeEventListener('pointerup', pointerEnd)
         host.canvas.removeEventListener('pointercancel', pointerEnd)
         host.canvas.removeEventListener('wheel', wheel)
+        host.canvas.removeEventListener('contextmenu', contextMenu)
+        window.removeEventListener('mouseup', mouseUp)
         window.removeEventListener('keydown', keyDown)
         window.removeEventListener('keyup', keyUp)
         window.removeEventListener('blur', blur)
+        document.removeEventListener('pointerlockchange', pointerLockChange)
         for (const pointerId of pointers.keys()) {
           if (host.canvas.hasPointerCapture(pointerId)) host.canvas.releasePointerCapture(pointerId)
         }
