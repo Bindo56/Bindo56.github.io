@@ -93,7 +93,7 @@ export const planetDefinitions = [
   },
   {
     slug: 'bitboard',
-    title: 'Bitboard Moon',
+    title: 'BitRoom',
     projectKey: 'bitwise-bitboard',
     position: initialOrbitPosition(orbitDefinitions.bitboard),
     orbit: orbitDefinitions.bitboard,

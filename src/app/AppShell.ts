@@ -24,7 +24,7 @@ const WORLD_TAGS: Record<string, string> = {
   'drone-fleet': 'AI SIM',
   'event-horizon': 'PLAYABLE',
   warfront: 'MULTIPLAYER',
-  bitboard: 'BITWISE MATH',
+  bitboard: 'PLAYABLE / BITWISE',
   'pixel-farm': 'SDL2 RENDERER',
   'material-forge': 'MAYA TOOL',
 }
@@ -35,7 +35,7 @@ const WORLD_NOTES: Record<string, string> = {
   'drone-fleet': 'VR drone flight and AI simulation.',
   'event-horizon': 'Launch swarms in a gravity lab.',
   warfront: 'Replicated multiplayer combat.',
-  bitboard: 'Bitwise math in a C# training game.',
+  bitboard: 'Learn bitwise logic inside a 64-bit room.',
   'pixel-farm': 'Tile farming rendered with SDL2.',
   'material-forge': 'PBR texture linking for Maya.',
 }
@@ -605,7 +605,9 @@ export class AppShell {
     document.title = planet.title + ' | Saurabh Kundalwal'
     this.canvas.setAttribute('aria-label', planet.slug === 'event-horizon'
       ? 'Solar DOTS gravity lab with five colored stone orbits around a black-hole shadow, a warm accretion disk, and one stylized light arc above the shadow. Drag to orbit the camera and scroll to zoom.'
-      : planet.title + ' project world')
+      : planet.slug === 'bitboard'
+        ? 'BitRoom interactive 64-bit floor. Select bits and logic operations in the lesson controls to route a signal.'
+        : planet.title + ' project world')
     if (!this.renderer || !this.space) {
       this.showFallback(planet)
       return
@@ -664,7 +666,7 @@ export class AppShell {
   }
 
   private showLanding(planet: PlanetDefinition): void {
-    if (planet.slug === 'event-horizon') {
+    if (planet.slug === 'event-horizon' || planet.slug === 'bitboard') {
       this.landing.hidden = true
       this.worldOverlay.hidden = false
       return

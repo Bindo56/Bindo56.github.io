@@ -84,7 +84,7 @@ export const projects: readonly Project[] = [
     key: 'bitwise-bitboard',
     id: 'C#',
     title: 'Bitwise Operator & Bitboard Training Game',
-    summary: 'C# console training game demonstrating AND, OR, XOR, and bitboard operations through examples and a mini game.',
+    summary: 'Original C# trainer for AND, OR, XOR, and 64-bit ulong bitboards, including set, clear, toggle, and test operations. BitRoom turns those ideas into a playable Three.js tutorial.',
     tech: ['C#', '.NET', 'Bitwise Operations', 'Bitboards'],
     github: 'https://github.com/Bindo56/Bitwise_-_Bitboard_TrainingGame',
     color: 0xd6dc52,
