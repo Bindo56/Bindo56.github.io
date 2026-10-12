@@ -302,7 +302,7 @@ export class WarfrontVisual {
     if (!fighter) return
     this.heading += this.turnSpeed * frame * 2.3
     const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading))
-    const right = new THREE.Vector3(forward.z, 0, -forward.x)
+    const right = new THREE.Vector3(-forward.z, 0, forward.x)
     const movement = forward.clone().multiplyScalar(this.moveForward).addScaledVector(right, this.moveStrafe)
     if (movement.lengthSq() > 1) movement.normalize()
     if (movement.lengthSq() > 0) {
