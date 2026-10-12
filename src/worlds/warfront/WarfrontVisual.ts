@@ -1,0 +1,404 @@
+import * as THREE from 'three'
+
+const PLANET_RADIUS = 3.35
+const UP = new THREE.Vector3(0, 1, 0)
+const FORWARD = new THREE.Vector3(0, 0, 1)
+const BLUE = 0x4ebaff
+const RED = 0xff6658
+
+type Team = 'blue' | 'red'
+
+interface Fighter {
+  root: THREE.Group
+  leftArm: THREE.Group
+  rightArm: THREE.Group
+  leftLeg: THREE.Group
+  rightLeg: THREE.Group
+  muzzle: THREE.Mesh
+  team: Team
+  baseX: number
+  baseZ: number
+  phase: number
+  x: number
+  z: number
+}
+
+interface Tracer {
+  mesh: THREE.Mesh
+  from: Fighter
+  to: Fighter
+  phase: number
+}
+
+interface Smoke {
+  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
+  baseX: number
+  baseZ: number
+  phase: number
+}
+
+/** A globe-scale spectator diorama. Every battle stays on the planet surface. */
+export class WarfrontVisual {
+  readonly scene = new THREE.Scene()
+  readonly camera = new THREE.PerspectiveCamera(48, 1, 0.1, 90)
+
+  private readonly geometries = new Set<THREE.BufferGeometry>()
+  private readonly materials = new Set<THREE.Material>()
+  private readonly boxCache = new Map<string, THREE.BoxGeometry>()
+  private readonly fighterMaterialCache = new Map<string, THREE.Material>()
+  private readonly fighters: Fighter[] = []
+  private readonly tracers: Tracer[] = []
+  private readonly smoke: Smoke[] = []
+  private readonly blasts: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
+  private readonly tempStart = new THREE.Vector3()
+  private readonly tempEnd = new THREE.Vector3()
+  private readonly tempDirection = new THREE.Vector3()
+  private elapsed = 0
+  private azimuth = 0
+  private elevation = 0.16
+  private distance = 12.8
+  private targetAzimuth = 0
+  private targetElevation = 0.16
+  private targetDistance = 12.8
+  private disposed = false
+  private readonly reducedMotion = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  constructor() {
+    this.scene.background = new THREE.Color(0x050b18)
+    this.scene.fog = new THREE.FogExp2(0x050b18, 0.011)
+    this.scene.add(new THREE.AmbientLight(0xb9d3f7, 1.45))
+    const sun = new THREE.DirectionalLight(0xffb79a, 2.5)
+    sun.position.set(6, 8, 10)
+    this.scene.add(sun)
+    const rim = new THREE.DirectionalLight(0x63a9ff, 1.25)
+    rim.position.set(-7, -2, -5)
+    this.scene.add(rim)
+
+    this.addStars()
+    const globe = new THREE.Group()
+    globe.name = 'Warfront planet'
+    this.scene.add(globe)
+    this.addPlanet(globe)
+
+    const directions = [
+      new THREE.Vector3(0.02, 0.14, 1),
+      new THREE.Vector3(0.7, -0.08, 0.76),
+      new THREE.Vector3(-0.72, 0.34, 0.73),
+      new THREE.Vector3(-0.24, -0.72, -0.72),
+    ]
+    directions.forEach((direction, index) => this.addBattlefield(globe, direction.normalize(), index))
+    this.update(0)
+  }
+
+  orbit(deltaX: number, deltaY: number): void {
+    if (this.disposed) return
+    this.targetAzimuth -= deltaX * 0.0046
+    this.targetElevation = THREE.MathUtils.clamp(this.targetElevation + deltaY * 0.0046, -1.18, 1.18)
+  }
+
+  zoom(delta: number): void {
+    if (this.disposed) return
+    this.targetDistance = THREE.MathUtils.clamp(this.targetDistance + delta * 0.013, 4.75, 15)
+  }
+
+  showPlanet(): void {
+    this.targetDistance = 12.8
+    this.targetAzimuth = 0
+    this.targetElevation = 0.16
+  }
+
+  focusBattle(): void {
+    this.targetDistance = 5.25
+    this.targetAzimuth = 0
+    this.targetElevation = 0.16
+  }
+
+  get zoomPercent(): number {
+    return Math.round((15 - this.targetDistance) / (15 - 4.75) * 100)
+  }
+
+  update(dt: number): void {
+    if (this.disposed) return
+    const frame = Number.isFinite(dt) ? THREE.MathUtils.clamp(dt, 0, 0.08) : 0
+    this.elapsed += frame
+    const easing = this.reducedMotion ? 1 : 1 - Math.exp(-6 * frame)
+    this.azimuth += (this.targetAzimuth - this.azimuth) * easing
+    this.elevation += (this.targetElevation - this.elevation) * easing
+    this.distance += (this.targetDistance - this.distance) * easing
+    const horizontal = Math.cos(this.elevation) * this.distance
+    this.camera.position.set(Math.sin(this.azimuth) * horizontal, Math.sin(this.elevation) * this.distance, Math.cos(this.azimuth) * horizontal)
+    this.camera.lookAt(0, 0, 0)
+
+    for (const fighter of this.fighters) {
+      const stride = this.elapsed * 2.9 + fighter.phase
+      fighter.x = fighter.baseX + Math.sin(this.elapsed * 0.73 + fighter.phase) * 0.075
+      fighter.z = fighter.baseZ + Math.cos(this.elapsed * 0.61 + fighter.phase) * 0.058
+      fighter.root.position.set(fighter.x, 0.036 + Math.abs(Math.sin(stride)) * 0.009, fighter.z)
+      fighter.root.rotation.y = (fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2) + Math.sin(this.elapsed * 0.8 + fighter.phase) * 0.075
+      fighter.leftLeg.rotation.x = Math.sin(stride) * 0.29
+      fighter.rightLeg.rotation.x = -Math.sin(stride) * 0.29
+      fighter.leftArm.rotation.x = -Math.sin(stride) * 0.09
+      fighter.rightArm.rotation.x = Math.sin(stride) * 0.09
+      fighter.muzzle.visible = Math.sin(this.elapsed * 6.8 + fighter.phase * 2.3) > 0.97
+    }
+
+    for (const tracer of this.tracers) {
+      const cycle = (this.elapsed * 1.15 + tracer.phase) % 1.9
+      tracer.mesh.visible = cycle < 0.42
+      if (!tracer.mesh.visible) continue
+      const progress = cycle / 0.42
+      this.tempStart.set(tracer.from.x, 0.17, tracer.from.z)
+      this.tempEnd.set(tracer.to.x, 0.16, tracer.to.z)
+      tracer.mesh.position.copy(this.tempStart).lerp(this.tempEnd, progress)
+      tracer.mesh.position.y += Math.sin(progress * Math.PI) * 0.085
+      this.tempDirection.copy(this.tempEnd).sub(this.tempStart).normalize()
+      tracer.mesh.quaternion.setFromUnitVectors(FORWARD, this.tempDirection)
+    }
+
+    for (const smoke of this.smoke) {
+      const rise = (this.elapsed * 0.19 + smoke.phase) % 1
+      smoke.mesh.position.set(smoke.baseX + Math.sin(this.elapsed * 0.7 + smoke.phase) * 0.035, 0.17 + rise * 0.54, smoke.baseZ)
+      smoke.mesh.scale.setScalar(0.7 + rise * 1.8)
+      smoke.mesh.material.opacity = (1 - rise) * 0.25
+    }
+    for (const blast of this.blasts) {
+      const cycle = (this.elapsed * 0.31 + blast.phase) % 1
+      const flare = cycle < 0.19 ? cycle / 0.19 : 0
+      blast.mesh.visible = flare > 0
+      blast.mesh.scale.setScalar(0.18 + flare * 2.1)
+      blast.mesh.material.opacity = (1 - flare) * 0.55
+    }
+  }
+
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.scene.clear()
+    for (const geometry of this.geometries) geometry.dispose()
+    for (const material of this.materials) material.dispose()
+    this.geometries.clear()
+    this.materials.clear()
+    this.boxCache.clear()
+    this.fighterMaterialCache.clear()
+    this.fighters.length = 0
+    this.tracers.length = 0
+    this.smoke.length = 0
+    this.blasts.length = 0
+  }
+
+  private addPlanet(globe: THREE.Group): void {
+    const geometry = this.geometry(new THREE.IcosahedronGeometry(PLANET_RADIUS, 5))
+    const positions = geometry.getAttribute('position')
+    const colors: number[] = []
+    const ash = new THREE.Color(0x182635)
+    const rust = new THREE.Color(0x70433f)
+    const ember = new THREE.Color(0xa34e30)
+    for (let index = 0; index < positions.count; index++) {
+      const x = positions.getX(index) / PLANET_RADIUS
+      const y = positions.getY(index) / PLANET_RADIUS
+      const z = positions.getZ(index) / PLANET_RADIUS
+      const heat = Math.sin(x * 19 + Math.sin(z * 13) * 2) * Math.cos(y * 24 - z * 6)
+      const fracture = Math.sin(x * 41 + y * 29) * Math.sin(z * 35 - x * 18)
+      const color = ash.clone().lerp(rust, THREE.MathUtils.clamp(0.48 + heat * 0.35, 0, 1))
+      if (fracture > 0.55) color.lerp(ember, (fracture - 0.55) * 0.5)
+      colors.push(color.r, color.g, color.b)
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    globe.add(new THREE.Mesh(geometry, this.material(new THREE.MeshStandardMaterial({
+      vertexColors: true, flatShading: true, roughness: 0.94, metalness: 0.07,
+    }))))
+    globe.add(new THREE.Mesh(
+      this.geometry(new THREE.SphereGeometry(PLANET_RADIUS * 1.037, 40, 28)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0xd4573d, side: THREE.BackSide, transparent: true, opacity: 0.12, depthWrite: false })),
+    ))
+  }
+
+  private addBattlefield(globe: THREE.Group, normal: THREE.Vector3, zoneIndex: number): void {
+    const zone = new THREE.Group()
+    zone.name = `Battle sector ${zoneIndex + 1}`
+    zone.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
+    zone.quaternion.setFromUnitVectors(UP, normal)
+    globe.add(zone)
+
+    const ground = new THREE.Mesh(
+      this.geometry(new THREE.CylinderGeometry(1.08, 1.03, 0.055, 12)),
+      this.material(new THREE.MeshStandardMaterial({ color: 0x1d2530, roughness: 0.9, metalness: 0.18, flatShading: true })),
+    )
+    ground.position.y = 0.012
+    zone.add(ground)
+    const perimeter = new THREE.Mesh(
+      this.geometry(new THREE.TorusGeometry(0.99, 0.012, 4, 56)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0xf37e3d, transparent: true, opacity: 0.35 })),
+    )
+    perimeter.rotation.x = -Math.PI / 2
+    perimeter.position.y = 0.044
+    zone.add(perimeter)
+    for (const [side, color] of [[-1, BLUE], [1, RED]] as const) {
+      const signal = new THREE.Mesh(
+        this.geometry(new THREE.BoxGeometry(0.018, 0.012, 0.68)),
+        this.material(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.82 })),
+      )
+      signal.position.set(side * 0.62, 0.052, 0)
+      zone.add(signal)
+    }
+
+    const ruin = this.material(new THREE.MeshStandardMaterial({ color: 0x56616b, roughness: 0.78, metalness: 0.28, flatShading: true }))
+    const scar = this.material(new THREE.MeshBasicMaterial({ color: 0xff7b39, transparent: true, opacity: 0.72 }))
+    for (let index = 0; index < 8; index++) {
+      const angle = index * Math.PI * 2 / 8 + zoneIndex * 0.31
+      const distance = 0.75 + hash(index * 3 + zoneIndex * 13) * 0.17
+      const height = 0.14 + hash(index * 19 + zoneIndex * 7) * 0.32
+      const wall = new THREE.Mesh(this.geometry(new THREE.BoxGeometry(0.14 + (index % 3) * 0.055, height, 0.11)), ruin)
+      wall.position.set(Math.cos(angle) * distance, height / 2 + 0.04, Math.sin(angle) * distance)
+      wall.rotation.set((index % 2 ? 1 : -1) * 0.1, angle + 0.4, (index % 3 - 1) * 0.13)
+      zone.add(wall)
+      if (index % 2 === 0) {
+        const crack = new THREE.Mesh(this.geometry(new THREE.BoxGeometry(0.24, 0.006, 0.012)), scar)
+        crack.position.set(Math.cos(angle) * (distance - 0.2), 0.046, Math.sin(angle) * (distance - 0.2))
+        crack.rotation.y = angle
+        zone.add(crack)
+      }
+    }
+
+    for (const side of [-1, 1]) {
+      const x = side * 0.74
+      const z = side * 0.51
+      const flame = new THREE.Mesh(
+        this.geometry(new THREE.ConeGeometry(0.072, 0.23, 5)),
+        this.material(new THREE.MeshBasicMaterial({ color: 0xff9e45, transparent: true, opacity: 0.82, depthWrite: false })),
+      )
+      flame.position.set(x, 0.16, z)
+      zone.add(flame)
+      for (let index = 0; index < 3; index++) {
+        const mesh = new THREE.Mesh(
+          this.geometry(new THREE.SphereGeometry(0.075, 6, 4)),
+          this.material(new THREE.MeshBasicMaterial({ color: 0x89939b, transparent: true, opacity: 0.2, depthWrite: false })),
+        )
+        zone.add(mesh)
+        this.smoke.push({ mesh, baseX: x, baseZ: z, phase: (index + (side + 1) * 0.37) / 3 })
+      }
+    }
+
+    const blue: Fighter[] = []
+    const red: Fighter[] = []
+    for (let index = 0; index < 6; index++) {
+      blue.push(this.addFighter(zone, 'blue', index, zoneIndex))
+      red.push(this.addFighter(zone, 'red', index, zoneIndex))
+    }
+    const blueBolt = this.material(new THREE.MeshBasicMaterial({ color: 0x7ae7ff, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const redBolt = this.material(new THREE.MeshBasicMaterial({ color: 0xffaa65, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const boltGeometry = this.geometry(new THREE.BoxGeometry(0.018, 0.018, 0.19))
+    for (let index = 0; index < 10; index++) {
+      const from = index % 2 ? red[index % red.length] : blue[index % blue.length]
+      const to = index % 2 ? blue[(index + 2) % blue.length] : red[(index + 3) % red.length]
+      const mesh = new THREE.Mesh(boltGeometry, from.team === 'blue' ? blueBolt : redBolt)
+      mesh.visible = false
+      zone.add(mesh)
+      this.tracers.push({ mesh, from, to, phase: index * 0.31 + zoneIndex * 0.17 })
+    }
+    const blast = new THREE.Mesh(
+      this.geometry(new THREE.SphereGeometry(0.13, 10, 8)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0xff9c51, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })),
+    )
+    blast.position.set(0.04, 0.14, (zoneIndex % 2 ? 1 : -1) * 0.23)
+    zone.add(blast)
+    this.blasts.push({ mesh: blast, phase: zoneIndex * 0.21 })
+  }
+
+  private addFighter(zone: THREE.Group, team: Team, index: number, zoneIndex: number): Fighter {
+    const color = team === 'blue' ? BLUE : RED
+    const armor = this.fighterMaterial(`armor-${team}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.68, metalness: 0.26, flatShading: true }))
+    const face = this.fighterMaterial('face', () => new THREE.MeshStandardMaterial({ color: 0xe8c8a0, roughness: 0.96, flatShading: true }))
+    const dark = this.fighterMaterial('dark', () => new THREE.MeshStandardMaterial({ color: 0x202b39, roughness: 0.72, metalness: 0.24 }))
+    const glint = this.fighterMaterial(`glint-${team}`, () => new THREE.MeshBasicMaterial({ color: team === 'blue' ? 0xb8f3ff : 0xffc1a3 }))
+    const root = new THREE.Group()
+    root.name = `${team} block soldier`
+    root.scale.setScalar(0.43)
+    zone.add(root)
+
+    const box = (width: number, height: number, depth: number, material: THREE.Material, x: number, y: number, z: number, parent: THREE.Group = root): THREE.Mesh => {
+      const mesh = new THREE.Mesh(this.boxGeometry(width, height, depth), material)
+      mesh.position.set(x, y, z)
+      parent.add(mesh)
+      return mesh
+    }
+    box(0.23, 0.22, 0.13, armor, 0, 0.27, 0)
+    box(0.17, 0.15, 0.14, face, 0, 0.47, 0.008)
+    box(0.22, 0.07, 0.19, armor, 0, 0.56, 0)
+    box(0.17, 0.044, 0.019, glint, 0, 0.49, 0.084)
+    box(0.15, 0.14, 0.07, dark, 0, 0.29, -0.11)
+    const leftArm = new THREE.Group()
+    const rightArm = new THREE.Group()
+    const leftLeg = new THREE.Group()
+    const rightLeg = new THREE.Group()
+    leftArm.position.set(-0.15, 0.35, 0)
+    rightArm.position.set(0.15, 0.35, 0)
+    leftLeg.position.set(-0.064, 0.16, 0)
+    rightLeg.position.set(0.064, 0.16, 0)
+    root.add(leftArm, rightArm, leftLeg, rightLeg)
+    box(0.065, 0.18, 0.075, armor, 0, -0.09, 0, leftArm)
+    box(0.065, 0.18, 0.075, armor, 0, -0.09, 0, rightArm)
+    box(0.072, 0.17, 0.078, dark, 0, -0.08, 0, leftLeg)
+    box(0.072, 0.17, 0.078, dark, 0, -0.08, 0, rightLeg)
+    box(0.058, 0.048, 0.31, dark, 0.04, 0.28, 0.18)
+    box(0.09, 0.066, 0.12, dark, 0.04, 0.28, 0.04)
+    const muzzle = box(0.105, 0.105, 0.04, glint, 0.04, 0.28, 0.355)
+    muzzle.visible = false
+
+    const phase = index * 0.88 + zoneIndex * 1.3 + (team === 'red' ? 2.2 : 0)
+    const baseX = (team === 'blue' ? -0.37 : 0.37) + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.23
+    const baseZ = -0.47 + index * 0.185 + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.07
+    const fighter: Fighter = { root, leftArm, rightArm, leftLeg, rightLeg, muzzle, team, baseX, baseZ, phase, x: baseX, z: baseZ }
+    this.fighters.push(fighter)
+    return fighter
+  }
+
+  private addStars(): void {
+    const positions: number[] = []
+    for (let index = 0; index < 280; index++) {
+      const y = 1 - (index / 279) * 2
+      const a = index * 2.399963 + hash(index + 40) * 0.4
+      const radius = Math.sqrt(1 - y * y)
+      positions.push(Math.cos(a) * radius * 42, y * 42, Math.sin(a) * radius * 42)
+    }
+    const geometry = this.geometry(new THREE.BufferGeometry())
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    this.scene.add(new THREE.Points(geometry, this.material(new THREE.PointsMaterial({ color: 0xb8d7ec, size: 0.038, sizeAttenuation: true }))))
+  }
+
+  private geometry<T extends THREE.BufferGeometry>(geometry: T): T {
+    this.geometries.add(geometry)
+    return geometry
+  }
+
+  private boxGeometry(width: number, height: number, depth: number): THREE.BoxGeometry {
+    const key = `${width}/${height}/${depth}`
+    let geometry = this.boxCache.get(key)
+    if (!geometry) {
+      geometry = this.geometry(new THREE.BoxGeometry(width, height, depth))
+      this.boxCache.set(key, geometry)
+    }
+    return geometry
+  }
+
+  private fighterMaterial(key: string, create: () => THREE.Material): THREE.Material {
+    let material = this.fighterMaterialCache.get(key)
+    if (!material) {
+      material = this.material(create())
+      this.fighterMaterialCache.set(key, material)
+    }
+    return material
+  }
+
+  private material<T extends THREE.Material>(material: T): T {
+    this.materials.add(material)
+    return material
+  }
+}
+
+function hash(value: number): number {
+  const fraction = Math.sin(value * 127.13) * 43758.5453
+  return fraction - Math.floor(fraction)
+}

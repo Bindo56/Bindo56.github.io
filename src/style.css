@@ -1706,3 +1706,81 @@ a { color: inherit; }
   .bitroom-game .bitroom-game-bit { min-height: 42px; }
   .bitroom-game .bitroom-game-hint-button { min-height: 44px; }
 }
+
+/* Warfront begins as a planet-scale spectator scene. */
+.warfront-ui { position: absolute; inset: 0; color: #eaf2f7; font-family: 'IBM Plex Mono', Consolas, monospace; pointer-events: none; }
+.warfront-observer-card, .warfront-controls, .warfront-footer { position: absolute; pointer-events: auto; }
+.warfront-observer-card {
+  top: 96px;
+  left: 18px;
+  width: min(350px, calc(100vw - 36px));
+  padding: 17px 19px;
+  border: 1px solid rgba(133, 171, 190, .4);
+  background: linear-gradient(130deg, rgba(5, 17, 31, .94), rgba(22, 29, 40, .75));
+  box-shadow: 0 18px 54px rgba(0, 0, 0, .3);
+  backdrop-filter: blur(13px);
+}
+.warfront-kicker { color: #ffb782; font: 700 10px/1.3 'IBM Plex Mono', Consolas, monospace; letter-spacing: .13em; }
+.warfront-observer-card h1 { margin: 9px 0 8px; color: #fff1df; font: 700 clamp(29px, 3vw, 43px)/.95 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif; text-transform: uppercase; letter-spacing: .025em; }
+.warfront-observer-card p { margin: 0; color: #c3d2dd; font: 500 12px/1.55 'IBM Plex Mono', Consolas, monospace; }
+.warfront-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 13px; margin-top: 16px; font: 700 10px/1.25 'IBM Plex Mono', Consolas, monospace; letter-spacing: .04em; }
+.warfront-legend span::before { display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: currentColor; content: ''; }
+.warfront-legend .is-blue { color: #77d9ff; }
+.warfront-legend .is-red { color: #ff9683; }
+.warfront-legend .warfront-observer-tag { color: #e6e5d5; }
+.warfront-legend .warfront-observer-tag::before { background: #edb876; }
+.warfront-controls {
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(133, 171, 190, .42);
+  background: rgba(6, 16, 28, .91);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, .27);
+  backdrop-filter: blur(12px);
+}
+.warfront-ui button, .warfront-link {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(144, 170, 188, .55);
+  border-radius: 2px;
+  background: #172433;
+  color: #eff7f6;
+  font: 700 11px/1.2 'IBM Plex Mono', Consolas, monospace;
+  text-decoration: none;
+}
+.warfront-ui button:hover, .warfront-link:hover { border-color: #8fe6ff; background: #24394b; }
+.warfront-ui button:focus-visible, .warfront-link:focus-visible { outline: 2px solid #fff2b3; outline-offset: 2px; }
+.warfront-ui .warfront-button.is-primary { border-color: #ffb076; color: #ffe0bb; }
+.warfront-ui .warfront-zoom { width: 38px; padding: 7px; font-size: 18px; }
+.warfront-zoom-value { min-width: 76px; color: #b4c6d2; font: 700 10px 'IBM Plex Mono', Consolas, monospace; text-align: center; }
+.warfront-footer { bottom: 19px; left: 18px; max-width: min(485px, calc(100vw - 36px)); color: #b7c9d5; font: 600 10px/1.4 'IBM Plex Mono', Consolas, monospace; letter-spacing: .025em; }
+.warfront-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.warfront-ui .warfront-link, .warfront-ui .warfront-exit { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 8px; font-size: 10px; }
+.warfront-ui .warfront-exit { border-color: rgba(255, 176, 118, .6); }
+@media (max-width: 850px) {
+  .warfront-footer { bottom: 78px; }
+}
+@media (max-width: 680px) {
+  .warfront-observer-card { top: 115px; right: 8px; left: 8px; width: auto; padding: 10px 12px; }
+  .warfront-observer-card h1 { margin: 5px 0 0; font-size: 24px; }
+  .warfront-observer-card p { display: none; }
+  .warfront-legend { gap: 5px 10px; margin-top: 7px; font-size: 8px; }
+  .warfront-controls { right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); left: 8px; justify-content: space-between; gap: 3px; padding: 5px; }
+  .warfront-controls button { min-height: 38px; padding: 6px 5px; font-size: 9px; }
+  .warfront-ui .warfront-zoom { width: 30px; font-size: 17px; }
+  .warfront-zoom-value { min-width: 45px; font-size: 8px; }
+  .warfront-footer { right: 8px; bottom: calc(65px + env(safe-area-inset-bottom)); left: 8px; max-width: none; font-size: 8px; }
+  .warfront-ui .warfront-link, .warfront-ui .warfront-exit { min-height: 30px; padding: 5px 6px; font-size: 8px; }
+}
+@media (max-height: 520px) and (pointer: coarse) {
+  .warfront-observer-card { top: 72px; right: auto; width: min(250px, 45vw); }
+  .warfront-observer-card p, .warfront-legend { display: none; }
+  .warfront-footer { bottom: 68px; width: min(300px, 49vw); }
+  .warfront-controls { right: 8px; bottom: 8px; left: auto; width: auto; }
+}
+@media (pointer: coarse) {
+  .warfront-ui button, .warfront-link { min-height: 44px; }
+}

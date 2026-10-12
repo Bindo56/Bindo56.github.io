@@ -607,6 +607,8 @@ export class AppShell {
       ? 'Solar DOTS gravity lab with five colored stone orbits around a black-hole shadow, a warm accretion disk, and one stylized light arc above the shadow. Drag to orbit the camera and scroll to zoom.'
       : planet.slug === 'bitboard'
         ? 'BitRoom interactive 64-bit floor. Select bits and logic operations in the lesson controls to route a signal.'
+        : planet.slug === 'warfront'
+          ? 'Warfront observer. Orbit a ruined sci-fi planet and zoom in to watch tiny blue and red block soldiers fighting.'
         : planet.title + ' project world')
     if (!this.renderer || !this.space) {
       this.showFallback(planet)
@@ -666,7 +668,7 @@ export class AppShell {
   }
 
   private showLanding(planet: PlanetDefinition): void {
-    if (planet.slug === 'event-horizon' || planet.slug === 'bitboard') {
+    if (planet.slug === 'event-horizon' || planet.slug === 'bitboard' || planet.slug === 'warfront') {
       this.landing.hidden = true
       this.worldOverlay.hidden = false
       return
