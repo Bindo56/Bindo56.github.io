@@ -97,12 +97,21 @@ export class BitroomVisual {
   private readonly pulseCore: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>
   private readonly pulseGlow: THREE.Sprite
   private readonly pulseLight: THREE.PointLight
+  private readonly bitRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>
+  private readonly boardRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>
+  private readonly bitFlashColor = new THREE.Color(COLOR.white)
+  private readonly boardFlashColor = new THREE.Color(COLOR.cyan)
   private readonly reducedMotion: boolean
 
   private state: BitroomVisualState = { value: 0n, target: 0n, width: 8 }
   private pulsePath: THREE.Vector3[] = []
   private pulseTime = 0
   private pulseDuration = 0
+  private bitFlashBit: number | null = null
+  private bitFlashTime = 0
+  private bitFlashDuration = 0
+  private boardFlashTime = 0
+  private boardFlashDuration = 0
   private elapsed = 0
   private disposed = false
 
@@ -145,6 +154,26 @@ export class BitroomVisual {
     this.pulse.add(this.pulseCore, this.pulseGlow, this.pulseLight)
     this.pulse.visible = false
     this.scene.add(this.pulse)
+
+    const ringGeometry = this.trackGeometry(new THREE.RingGeometry(0.9, 1, 48))
+    const ringMaterial = () => this.trackMaterial(new THREE.MeshBasicMaterial({
+      color: COLOR.cyan,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    }))
+    this.bitRing = new THREE.Mesh(ringGeometry, ringMaterial())
+    this.boardRing = new THREE.Mesh(ringGeometry, ringMaterial())
+    for (const ring of [this.bitRing, this.boardRing]) {
+      ring.rotation.x = -Math.PI / 2
+      ring.visible = false
+      ring.renderOrder = 2
+      this.scene.add(ring)
+    }
+    this.bitRing.position.y = 0.58
+    this.boardRing.position.y = 0.61
 
     this.positionCamera(true)
     this.setState(this.state)
@@ -201,6 +230,28 @@ export class BitroomVisual {
     this.placePulse(0)
   }
 
+  /** Briefly marks a chosen bit without changing the stored board value. */
+  flashBit(bit: number): void {
+    if (this.disposed || !Number.isInteger(bit) || bit < 0 || bit >= this.state.width) return
+    this.bitFlashBit = bit
+    this.bitFlashTime = 0
+    this.bitFlashDuration = this.reducedMotion ? 0.22 : 0.42
+    this.bitRing.position.copy(gridPosition(bit))
+    this.bitRing.position.y = 0.58
+    this.bitRing.visible = !this.reducedMotion
+  }
+
+  /** A single restrained floor sweep for a committed operation or a mismatch. */
+  flashBoard(kind: 'apply' | 'error'): void {
+    if (this.disposed) return
+    const color = kind === 'error' ? COLOR.magenta : COLOR.cyan
+    this.boardFlashColor.setHex(color)
+    this.boardFlashTime = 0
+    this.boardFlashDuration = this.reducedMotion ? 0.22 : 0.52
+    this.boardRing.material.color.setHex(color)
+    this.boardRing.visible = !this.reducedMotion
+  }
+
   update(dt: number): void {
     if (this.disposed) return
     const frame = Number.isFinite(dt) ? THREE.MathUtils.clamp(dt, 0, 0.08) : 0
@@ -212,6 +263,28 @@ export class BitroomVisual {
     this.camera.position.lerp(this.cameraGoal, cameraEase)
     this.focus.lerp(this.focusGoal, cameraEase)
     this.camera.lookAt(this.focus)
+
+    if (this.bitFlashTime < this.bitFlashDuration) {
+      this.bitFlashTime = Math.min(this.bitFlashDuration, this.bitFlashTime + frame)
+      const progress = this.bitFlashTime / this.bitFlashDuration
+      if (!this.reducedMotion) {
+        this.bitRing.scale.setScalar(0.42 + progress * 0.43)
+        this.bitRing.material.opacity = (1 - progress) * 0.86
+      }
+      if (progress >= 1) {
+        this.bitRing.visible = false
+        this.bitFlashBit = null
+      }
+    }
+    if (this.boardFlashTime < this.boardFlashDuration) {
+      this.boardFlashTime = Math.min(this.boardFlashDuration, this.boardFlashTime + frame)
+      const progress = this.boardFlashTime / this.boardFlashDuration
+      if (!this.reducedMotion) {
+        this.boardRing.scale.setScalar(0.55 + progress * 6.4)
+        this.boardRing.material.opacity = (1 - progress) * 0.38
+      }
+      if (progress >= 1) this.boardRing.visible = false
+    }
 
     if (this.pulse.visible) {
       this.pulseTime += frame
@@ -407,6 +480,14 @@ export class BitroomVisual {
           ? (previewOn ? this.previewOnColor : this.previewOffColor)
           : (isOn ? this.onColor : this.offColor)
       tile.slab.material.color.lerp(color, alpha)
+      if (active && this.boardFlashTime < this.boardFlashDuration) {
+        const strength = (1 - this.boardFlashTime / this.boardFlashDuration) * 0.4
+        tile.slab.material.color.lerp(this.boardFlashColor, strength)
+      }
+      if (tile.bit === this.bitFlashBit && this.bitFlashTime < this.bitFlashDuration) {
+        const strength = (1 - this.bitFlashTime / this.bitFlashDuration) * 0.78
+        tile.slab.material.color.lerp(this.bitFlashColor, strength)
+      }
       tile.slab.material.emissive.copy(tile.slab.material.color).multiplyScalar(active ? 0.25 : 0.06)
       tile.glyph.material.map = displayedOn ? this.oneTexture : this.zeroTexture
       tile.glyph.material.color.setHex(!active ? 0x3a5056 : changed ? (previewOn ? COLOR.cyan : COLOR.magenta) : displayedOn ? COLOR.lime : 0x6c9395)

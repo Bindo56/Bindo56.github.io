@@ -4,7 +4,7 @@ import { ShipController, type ShipActions } from './ShipController.ts'
 import { createSpaceToonMaterial } from './SpaceToonShader.ts'
 import { OrbitSystem } from './OrbitSystem.ts'
 import { createPlanetMotif, type PlanetMotif } from './PlanetMotifs.ts'
-import { BlackHoleVisual } from '../worlds/solar-dots/BlackHoleVisual.ts'
+import { SunVisual } from './SunVisual.ts'
 import {
   differenceSpacePosition,
   distanceBetweenSpacePositions,
@@ -43,7 +43,7 @@ export class SpaceSession {
   private readonly thrusterGlows: THREE.Mesh[] = []
   private readonly planets: PlanetProxy[] = []
   private readonly orbitTracks: OrbitTrack[] = []
-  private readonly blackHole: BlackHoleVisual
+  private readonly sun: SunVisual
   private readonly starDome: THREE.Points
   private readonly nearbyStars: THREE.Points
   private readonly outlineMaterial = new THREE.MeshBasicMaterial({
@@ -92,10 +92,10 @@ export class SpaceSession {
     )
     this.scene.add(this.starDome, this.nearbyStars)
 
-    this.blackHole = new BlackHoleVisual({ faceCamera: false })
-    // The glow ends within the first orbit (260 units), leaving a visible gap.
-    this.blackHole.group.scale.setScalar(18)
-    this.scene.add(this.blackHole.group)
+    this.sun = new SunVisual()
+    // Keep the corona inside the first orbit while making the star readable from the starting point.
+    this.sun.group.scale.setScalar(96)
+    this.scene.add(this.sun.group)
 
     definitions.forEach(definition => {
       const motif = createPlanetMotif(definition)
@@ -163,6 +163,7 @@ export class SpaceSession {
 
   setReducedMotion(value: boolean): void {
     this.reducedMotion = value
+    this.sun.setReducedMotion(value)
   }
 
   /** World-space direction of the ship's nose, useful for the flight HUD. */
@@ -208,8 +209,8 @@ export class SpaceSession {
       this.scene.remove(proxy.motif.group)
       proxy.motif.dispose()
     })
-    this.scene.remove(this.blackHole.group)
-    this.blackHole.dispose()
+    this.scene.remove(this.sun.group)
+    this.sun.dispose()
     const geometries = new Set<THREE.BufferGeometry>()
     const materials = new Set<THREE.Material>()
     this.scene.traverse(object => {
@@ -246,15 +247,15 @@ export class SpaceSession {
 
     this.starDome.position.copy(this.camera.position)
     this.updateNearbyStars()
-    this.updateSystemCenter()
+    this.updateSystemCenter(dt)
     this.updatePlanets()
     this.updateTrackVisibility()
   }
 
-  private updateSystemCenter(): void {
-    this.blackHole.group.position.set(...differenceSpacePosition(this.controller.position, this.orbits.getCenter()))
-    this.blackHole.update(this.orbits.getElapsedSeconds(), this.camera)
-    for (const track of this.orbitTracks) track.line.position.copy(this.blackHole.group.position)
+  private updateSystemCenter(dt: number): void {
+    this.sun.group.position.set(...differenceSpacePosition(this.controller.position, this.orbits.getCenter()))
+    this.sun.update(dt)
+    for (const track of this.orbitTracks) track.line.position.copy(this.sun.group.position)
   }
 
   private updatePlanets(): void {

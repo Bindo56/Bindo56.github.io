@@ -1,4 +1,5 @@
 import type { PlanetHost, PlanetSession } from '../../app/PlanetContracts.ts'
+import { BitroomAudio } from './BitroomAudio.ts'
 import { BitroomVisual } from './BitroomVisual.ts'
 
 type Width = 4 | 8 | 64
@@ -176,6 +177,7 @@ export class BitroomGame implements PlanetSession {
   readonly camera
 
   private readonly visual: BitroomVisual
+  private readonly audio = new BitroomAudio()
   private readonly root: HTMLElement
   private readonly host: PlanetHost
   private readonly canvasPointer: (event: PointerEvent) => void
@@ -234,6 +236,7 @@ export class BitroomGame implements PlanetSession {
     this.host.canvas.removeEventListener('pointerdown', this.canvasPointer)
     window.removeEventListener('keydown', this.keydown)
     this.root.remove()
+    this.audio.dispose()
     this.visual.dispose()
   }
 
@@ -300,6 +303,8 @@ export class BitroomGame implements PlanetSession {
     this.feedback = this.mask === 0n ? 'Select at least one tile.' : `${countBits(this.mask)} bit${countBits(this.mask) === 1 ? '' : 's'} in your mask. Preview before applying.`
     this.feedbackTone = 'neutral'
     this.render()
+    this.visual.flashBit(index)
+    this.audio.playSelect(index, (this.mask & mask) !== 0n)
   }
 
   private setOperator(operator: Operator): void {
@@ -308,6 +313,7 @@ export class BitroomGame implements PlanetSession {
     this.feedback = 'The preview shows the output before you commit it.'
     this.feedbackTone = 'neutral'
     this.render()
+    this.audio.playOperator()
   }
 
   private preview(): bigint | null {
@@ -340,6 +346,8 @@ export class BitroomGame implements PlanetSession {
       this.feedback = step.kind === 'logic' ? 'Choose AND, OR, or XOR first.' : 'Select at least one bit before applying.'
       this.feedbackTone = 'try'
       this.render()
+      this.visual.flashBoard('error')
+      this.audio.playError()
       return
     }
     const before = this.value
@@ -353,6 +361,8 @@ export class BitroomGame implements PlanetSession {
       this.mask = 0n
       this.lastSelected = null
       this.render()
+      this.visual.flashBoard('apply')
+      this.audio.playApply()
       if (changed > 0) this.visual.celebrate()
       return
     }
@@ -361,6 +371,8 @@ export class BitroomGame implements PlanetSession {
       this.feedback = `${this.operator} produces ${binary(result, step.width)}. The gate needs ${binary(step.target, step.width)}. Compare each input column and try another operator.`
       this.feedbackTone = 'try'
       this.render()
+      this.visual.flashBoard('error')
+      this.audio.playError()
       return
     }
     let success = this.value === step.target
@@ -390,7 +402,13 @@ export class BitroomGame implements PlanetSession {
       this.feedbackTone = 'try'
     }
     this.render()
-    if (success) this.visual.celebrate()
+    this.visual.flashBoard(success ? 'apply' : 'error')
+    if (success) {
+      this.audio.playSuccess()
+      this.visual.celebrate()
+    } else {
+      this.audio.playError()
+    }
   }
 
   private toggleEngineer(): void {
@@ -415,13 +433,23 @@ export class BitroomGame implements PlanetSession {
     const brand = h('div', 'bitroom-game-brand')
     brand.append(h('span', 'bitroom-game-kicker', 'SYSTEM ZERO / BITROOM'), h('h1', '', 'One room. Sixty-four switches.'))
     const mastActions = h('div', 'bitroom-game-mast-actions')
-    const engineerButton = this.button(this.engineer ? 'Close engineer view' : 'Engineer view', () => this.toggleEngineer(), 'bitroom-game-ghost')
+    const soundButton = this.button(this.audio.muted ? 'SFX OFF' : 'SFX ON', () => {
+      const muted = this.audio.toggleMuted()
+      if (!muted) this.audio.playOperator()
+      this.render()
+    }, 'bitroom-game-ghost bitroom-game-sound')
+    soundButton.setAttribute('aria-label', this.audio.muted ? 'Turn BitRoom sound effects on' : 'Turn BitRoom sound effects off')
+    soundButton.setAttribute('aria-pressed', String(!this.audio.muted))
+    soundButton.dataset.bitroomFocus = 'sound'
+    const engineerButton = this.button(this.engineer ? 'Close engineer' : 'Engineer', () => this.toggleEngineer(), 'bitroom-game-ghost')
+    engineerButton.setAttribute('aria-label', this.engineer ? 'Close engineer view' : 'Open engineer view')
     engineerButton.setAttribute('aria-pressed', String(this.engineer))
     engineerButton.dataset.bitroomFocus = 'engineer'
-    const exit = this.button('Return to space ↗', () => this.host.onExit(), 'bitroom-game-exit')
+    const exit = this.button('Exit ↗', () => this.host.onExit(), 'bitroom-game-exit')
+    exit.setAttribute('aria-label', 'Return to space')
     exit.dataset.testid = 'exit-world'
     exit.dataset.bitroomFocus = 'exit'
-    mastActions.append(engineerButton, exit)
+    mastActions.append(soundButton, engineerButton, exit)
     mast.append(brand, mastActions)
     this.root.append(mast)
 
@@ -572,6 +600,8 @@ export class BitroomGame implements PlanetSession {
           this.feedback = 'Enter a whole bit position from 0 to 63.'
           this.feedbackTone = 'try'
           this.render()
+          this.visual.flashBoard('error')
+          this.audio.playError()
         }
       }
       input.addEventListener('keydown', event => {
