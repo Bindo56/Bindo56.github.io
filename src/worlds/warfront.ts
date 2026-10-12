@@ -93,6 +93,8 @@ const module: PlanetModule = {
     const soldierHud = el('section', 'warfront-soldier-hud')
     const teamLabel = el('span', 'warfront-soldier-team')
     const weaponLabel = el('span', 'warfront-soldier-weapon')
+    const killLabel = el('strong', 'warfront-kill-count')
+    killLabel.setAttribute('aria-live', 'polite')
     const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT')
     const weaponControls = el('div', 'warfront-soldier-actions')
     const rifle = el('button', 'warfront-button', '1  Assault rifle')
@@ -103,7 +105,7 @@ const module: PlanetModule = {
     rocket.addEventListener('click', () => { visual.equip('rocket'); syncMode() })
     leave.addEventListener('click', () => { releaseAim(); visual.leaveSoldier(); syncMode() })
     weaponControls.append(rifle, rocket, leave)
-    soldierHud.append(teamLabel, weaponLabel, soldierHelp, weaponControls)
+    soldierHud.append(teamLabel, weaponLabel, killLabel, soldierHelp, weaponControls)
 
     const touchControls = el('div', 'warfront-touch-controls')
     const touchPad = el('div', 'warfront-touch-pad')
@@ -165,6 +167,7 @@ const module: PlanetModule = {
       teamLabel.textContent = playing ? `${visual.playerTeam?.toUpperCase()} SQUAD · YOU ARE ON THE GROUND` : ''
       teamLabel.classList.toggle('is-red', visual.playerTeam === 'red')
       weaponLabel.textContent = visual.currentWeapon === 'rifle' ? 'ASSAULT RIFLE · AUTO' : 'ROCKET LAUNCHER · HEAVY'
+      updateKills()
       rifle.classList.toggle('is-primary', visual.currentWeapon === 'rifle')
       rocket.classList.toggle('is-primary', visual.currentWeapon === 'rocket')
       soldierHelp.textContent = document.pointerLockElement === host.canvas
@@ -173,6 +176,12 @@ const module: PlanetModule = {
       if (!playing) { held.clear(); mouseFiring = false; visual.setFiring(false); visual.setMovement(0, 0, 0); updateZoom() }
     }
     updateZoom()
+
+    function updateKills(): void {
+      if (!visual.isPlaying) return
+      const label = `${visual.enemyTeam?.toUpperCase()} ELIMINATED  ${visual.enemyKills}`
+      if (killLabel.textContent !== label) killLabel.textContent = label
+    }
 
     function lockAim(): void {
       if (!visual.isPlaying || !host.isInteractive() || !window.matchMedia('(pointer: fine)').matches || document.pointerLockElement === host.canvas) return
@@ -268,7 +277,7 @@ const module: PlanetModule = {
     return {
       scene: visual.scene,
       camera: visual.camera,
-      update(dt: number) { if (!host.isInteractive()) { releaseAim(); syncMovement() } visual.update(dt) },
+      update(dt: number) { if (!host.isInteractive()) { releaseAim(); syncMovement() } visual.update(dt); updateKills() },
       dispose() {
         if (disposed) return
         disposed = true
