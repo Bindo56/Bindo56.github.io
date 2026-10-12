@@ -102,9 +102,13 @@ export class SunVisual {
 
     this.plasmaMaterial = this.material(new THREE.ShaderMaterial({
       name: 'Travelling solar prominences',
-      uniforms: { uTime: { value: 0 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uReducedMotion: { value: this.reducedMotion ? 1 : 0 },
+      },
       vertexShader: /* glsl */ `
         uniform float uTime;
+        uniform float uReducedMotion;
         attribute float aProgress;
         attribute float aSeed;
         varying vec3 vLocal;
@@ -112,17 +116,27 @@ export class SunVisual {
         varying float vSeed;
         varying float vLife;
         void main() {
-          // A prominence grows from two surface anchors, carries a wave
-          // between them, then settles back into the sun before repeating.
-          float age = fract(uTime * (0.045 + aSeed * 0.015) + aSeed);
-          float life = smoothstep(0.0, 0.16, age)
-            * (1.0 - smoothstep(0.73, 1.0, age));
+          // Four staggered 7.2-second cycles leave three or four loops visible.
+          // Each grows from one foot, then collapses toward the other foot.
+          float age = mix(fract(uTime / 7.2 + aSeed), 0.5, uReducedMotion);
+          float head = clamp((age - 0.08) / 0.25, 0.0, 1.0);
+          float tail = clamp((age - 0.68) / 0.22, 0.0, 1.0);
+          float growing = 1.0 - smoothstep(head - 0.12, head + 0.03, aProgress);
+          float receding = smoothstep(tail - 0.03, tail + 0.12, aProgress);
+          float life = growing * receding
+            * smoothstep(0.06, 0.16, age)
+            * (1.0 - smoothstep(0.83, 0.93, age));
+
+          // The raised crest physically travels along the loop, rather than
+          // only making a static arch brighter.
+          float crestPosition = clamp((age - 0.12) / 0.61, 0.0, 1.0);
+          float crestDistance = (aProgress - crestPosition) * 7.0;
+          float crest = exp(-crestDistance * crestDistance);
           float anchored = sin(aProgress * 3.14159265);
           vec3 radial = normalize(position);
           float aboveSurface = max(length(position) - 1.0, 0.0);
-          vec3 moved = radial * (1.0 + aboveSurface * life);
-          moved += radial * anchored * life
-            * sin(aProgress * 12.0 - uTime * 2.5 + aSeed * 8.0) * 0.034;
+          vec3 moved = radial * (1.0 + aboveSurface * life
+            + anchored * crest * life * 0.095);
 
           // The anchored region drifts over the sphere; the sun itself never
           // turns to face the camera.
@@ -140,6 +154,7 @@ export class SunVisual {
       `,
       fragmentShader: /* glsl */ `
         uniform float uTime;
+        uniform float uReducedMotion;
         varying vec3 vLocal;
         varying float vProgress;
         varying float vSeed;
@@ -147,8 +162,9 @@ export class SunVisual {
         ${SOLAR_PATTERN}
         void main() {
           float heat = solarHeat(normalize(vLocal) + vProgress * 0.03, uTime + vSeed);
-          // A bright crest travels from one anchored foot to the other.
-          float crestPosition = fract(uTime * (0.23 + vSeed * 0.04) + vSeed * 2.7);
+          float age = mix(fract(uTime / 7.2 + vSeed), 0.5, uReducedMotion);
+          // The bright crest follows the same moving bulge as the geometry.
+          float crestPosition = clamp((age - 0.12) / 0.61, 0.0, 1.0);
           float distanceToCrest = vProgress - crestPosition;
           float crest = exp(-distanceToCrest * distanceToCrest * 95.0);
           float trail = step(vProgress, crestPosition)
@@ -186,6 +202,7 @@ export class SunVisual {
     }
     this.surfaceMaterial.uniforms.uTime.value = this.elapsed
     this.plasmaMaterial.uniforms.uTime.value = this.elapsed
+    this.plasmaMaterial.uniforms.uReducedMotion.value = this.reducedMotion ? 1 : 0
     this.coronaMaterials.forEach(material => {
       material.uniforms.uTime.value = this.elapsed
     })
@@ -275,7 +292,7 @@ function makePlasmaGeometry(): THREE.BufferGeometry {
   const sides = 8
   const goldenAngle = Math.PI * (3 - Math.sqrt(5))
   const latitudes = [-0.47, -0.12, 0.24, 0.56]
-  const phases = [0.19, 0.42, 0.63, 0.82]
+  const phases = [0.19, 0.44, 0.69, 0.94]
 
   for (let flare = 0; flare < count; flare++) {
     const y = latitudes[flare]
@@ -339,7 +356,8 @@ function makePlasmaGeometry(): THREE.BufferGeometry {
   geometry.setAttribute('aProgress', new THREE.Float32BufferAttribute(progress, 1))
   geometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(seeds, 1))
   geometry.setIndex(indices)
-  geometry.computeBoundingSphere()
+  // The shader raises and drifts loops beyond their authored rest positions.
+  geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1.7)
   return geometry
 }
 
