@@ -101,7 +101,7 @@ export class SunVisual {
     this.addCoronaShell(1.47, 0.065)
 
     this.plasmaMaterial = this.material(new THREE.ShaderMaterial({
-      name: 'Solar plasma splashes',
+      name: 'Travelling solar prominences',
       uniforms: { uTime: { value: 0 } },
       vertexShader: /* glsl */ `
         uniform float uTime;
@@ -110,13 +110,31 @@ export class SunVisual {
         varying vec3 vLocal;
         varying float vProgress;
         varying float vSeed;
+        varying float vLife;
         void main() {
+          // A prominence grows from two surface anchors, carries a wave
+          // between them, then settles back into the sun before repeating.
+          float age = fract(uTime * (0.045 + aSeed * 0.015) + aSeed);
+          float life = smoothstep(0.0, 0.16, age)
+            * (1.0 - smoothstep(0.73, 1.0, age));
           float anchored = sin(aProgress * 3.14159265);
-          vec3 moved = position + normalize(position)
-            * anchored * sin(uTime * (1.3 + aSeed * 0.4) + aSeed * 8.0 + aProgress * 7.0) * 0.014;
+          vec3 radial = normalize(position);
+          float aboveSurface = max(length(position) - 1.0, 0.0);
+          vec3 moved = radial * (1.0 + aboveSurface * life);
+          moved += radial * anchored * life
+            * sin(aProgress * 12.0 - uTime * 2.5 + aSeed * 8.0) * 0.034;
+
+          // The anchored region drifts over the sphere; the sun itself never
+          // turns to face the camera.
+          float longitude = uTime * (0.045 + aSeed * 0.018);
+          float c = cos(longitude);
+          float s = sin(longitude);
+          moved = vec3(c * moved.x + s * moved.z, moved.y,
+            -s * moved.x + c * moved.z);
           vLocal = moved;
           vProgress = aProgress;
           vSeed = aSeed;
+          vLife = life;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(moved, 1.0);
         }
       `,
@@ -125,13 +143,22 @@ export class SunVisual {
         varying vec3 vLocal;
         varying float vProgress;
         varying float vSeed;
+        varying float vLife;
         ${SOLAR_PATTERN}
         void main() {
           float heat = solarHeat(normalize(vLocal) + vProgress * 0.03, uTime + vSeed);
-          vec3 color = mix(solarColor(heat), vec3(1.85, 1.20, 0.37), 0.32);
-          float tip = 1.0 - smoothstep(0.76, 1.0, vProgress);
-          float flicker = 0.78 + 0.22 * sin(uTime * 2.3 + vSeed * 9.0 + vProgress * 8.0);
-          gl_FragColor = vec4(color, (0.54 + heat * 0.31) * tip * flicker);
+          // A bright crest travels from one anchored foot to the other.
+          float crestPosition = fract(uTime * (0.23 + vSeed * 0.04) + vSeed * 2.7);
+          float distanceToCrest = vProgress - crestPosition;
+          float crest = exp(-distanceToCrest * distanceToCrest * 95.0);
+          float trail = step(vProgress, crestPosition)
+            * exp(-max(crestPosition - vProgress, 0.0) * 15.0);
+          vec3 color = mix(solarColor(heat), vec3(2.0, 1.32, 0.47),
+            0.18 + crest * 0.7 + trail * 0.18);
+          float footFade = 0.7 + 0.3 * sin(vProgress * 3.14159265);
+          float alpha = (0.38 + heat * 0.32 + crest * 0.24)
+            * vLife * footFade;
+          gl_FragColor = vec4(color, alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
@@ -143,7 +170,7 @@ export class SunVisual {
       toneMapped: true,
     }))
     const plasma = new THREE.Mesh(this.geometry(makePlasmaGeometry()), this.plasmaMaterial)
-    plasma.name = 'Arched prominences and solar splashes'
+    plasma.name = 'Four travelling solar prominence waves'
     plasma.renderOrder = 2
     this.group.add(plasma)
 
@@ -237,45 +264,43 @@ export class SunVisual {
   }
 }
 
-/** A single draw call of deterministic 3D arches and tapered jets. */
+/** Four broad, two-footed prominence loops in one draw call. */
 function makePlasmaGeometry(): THREE.BufferGeometry {
   const positions: number[] = []
   const progress: number[] = []
   const seeds: number[] = []
   const indices: number[] = []
-  const count = 25
-  const lengthSegments = 14
-  const sides = 5
+  const count = 4
+  const lengthSegments = 40
+  const sides = 8
   const goldenAngle = Math.PI * (3 - Math.sqrt(5))
+  const latitudes = [-0.47, -0.12, 0.24, 0.56]
+  const phases = [0.19, 0.42, 0.63, 0.82]
 
   for (let flare = 0; flare < count; flare++) {
-    const y = 1 - (flare + 0.5) * 2 / count
+    const y = latitudes[flare]
+    const longitude = flare * goldenAngle + 0.4
     const radial = new THREE.Vector3(
-      Math.sqrt(1 - y * y) * Math.cos(flare * goldenAngle),
+      Math.sqrt(1 - y * y) * Math.cos(longitude),
       y,
-      Math.sqrt(1 - y * y) * Math.sin(flare * goldenAngle),
+      Math.sqrt(1 - y * y) * Math.sin(longitude),
     )
     const tangent = new THREE.Vector3().crossVectors(
-      Math.abs(y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(0, 1, 0),
       radial,
-    ).normalize().applyAxisAngle(radial, flare * 1.87)
+    ).normalize().applyAxisAngle(radial, 0.35 + flare * 0.86)
     const binormal = new THREE.Vector3().crossVectors(radial, tangent).normalize()
-    const arch = flare % 3 !== 0
-    const height = (arch ? 0.27 : 0.36) + hash(flare * 17 + 4) * 0.28
-    const sweep = 0.18 + hash(flare * 19 + 7) * 0.28
-    const width = arch ? 0.033 : 0.059
-    const seed = hash(flare * 23 + 11)
+    const height = 0.31 + hash(flare * 17 + 4) * 0.13
+    const sweep = 0.52 + hash(flare * 19 + 7) * 0.16
+    const width = 0.031 + hash(flare * 13 + 3) * 0.013
+    const seed = phases[flare]
     const start = positions.length / 3
 
     const centerAt = (t: number): THREE.Vector3 => {
-      if (arch) {
-        return radial.clone().multiplyScalar(0.99 + height * Math.sin(Math.PI * t))
-          .addScaledVector(tangent, sweep * (t - 0.5))
-          .addScaledVector(binormal, 0.035 * Math.sin(Math.PI * t) * Math.sin(flare * 2.4))
-      }
-      return radial.clone().multiplyScalar(0.985 + height * Math.sin(t * Math.PI * 0.5))
-        .addScaledVector(tangent, sweep * t * t)
-        .addScaledVector(binormal, 0.08 * Math.sin(Math.PI * t))
+      const arch = Math.sin(Math.PI * t)
+      return radial.clone().addScaledVector(tangent, sweep * (t - 0.5))
+        .normalize().multiplyScalar(1 + height * arch)
+        .addScaledVector(binormal, 0.025 * arch * Math.sin(flare * 2.4))
     }
 
     for (let step = 0; step <= lengthSegments; step++) {
@@ -287,10 +312,8 @@ function makePlasmaGeometry(): THREE.BufferGeometry {
       const side = new THREE.Vector3().crossVectors(direction, radial).normalize()
       if (side.lengthSq() < 0.001) side.copy(tangent)
       const up = new THREE.Vector3().crossVectors(direction, side).normalize()
-      const taper = arch
-        ? Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.48) * 0.85 + 0.15
-        : Math.pow(1 - t, 1.25) * 1.2 + 0.015
-      const radius = width * taper * (0.82 + 0.18 * Math.sin(t * 13 + seed * 8))
+      const taper = 0.29 + 0.71 * Math.pow(Math.max(0, Math.sin(Math.PI * t)), 0.55)
+      const radius = width * taper * (0.89 + 0.11 * Math.sin(t * 17 + seed * 8))
       for (let sideIndex = 0; sideIndex < sides; sideIndex++) {
         const angle = sideIndex * Math.PI * 2 / sides
         const point = center.clone()
