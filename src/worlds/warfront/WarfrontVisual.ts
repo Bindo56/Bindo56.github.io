@@ -23,6 +23,11 @@ interface Fighter {
   z: number
 }
 
+interface BattleZone {
+  root: THREE.Group
+  normal: THREE.Vector3
+}
+
 interface Tracer {
   mesh: THREE.Mesh
   from: Fighter
@@ -47,9 +52,13 @@ export class WarfrontVisual {
   private readonly boxCache = new Map<string, THREE.BoxGeometry>()
   private readonly fighterMaterialCache = new Map<string, THREE.Material>()
   private readonly fighters: Fighter[] = []
+  private readonly battleZones: BattleZone[] = []
   private readonly tracers: Tracer[] = []
   private readonly smoke: Smoke[] = []
   private readonly blasts: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
+  private readonly shockwaves: { mesh: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
+  private readonly embers: { mesh: THREE.InstancedMesh; positions: THREE.Vector3[]; phases: number[]; zone: THREE.Group }[] = []
+  private readonly dummy = new THREE.Object3D()
   private readonly tempStart = new THREE.Vector3()
   private readonly tempEnd = new THREE.Vector3()
   private readonly tempDirection = new THREE.Vector3()
@@ -82,13 +91,14 @@ export class WarfrontVisual {
     this.scene.add(globe)
     this.addPlanet(globe)
 
-    const directions = [
-      new THREE.Vector3(0.02, 0.14, 1),
-      new THREE.Vector3(0.7, -0.08, 0.76),
-      new THREE.Vector3(-0.72, 0.34, 0.73),
-      new THREE.Vector3(-0.24, -0.72, -0.72),
-    ]
-    directions.forEach((direction, index) => this.addBattlefield(globe, direction.normalize(), index))
+    this.addSurfaceDetails(globe)
+    // Fibonacci spacing covers both hemispheres without a repeated latitude pattern.
+    for (let index = 0; index < 28; index++) {
+      const y = 1 - 2 * (index + 0.5) / 28
+      const radius = Math.sqrt(1 - y * y)
+      const angle = index * Math.PI * (3 - Math.sqrt(5))
+      this.addBattlefield(globe, new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius), index)
+    }
     this.update(0)
   }
 
@@ -135,7 +145,7 @@ export class WarfrontVisual {
       const stride = this.elapsed * 2.9 + fighter.phase
       fighter.x = fighter.baseX + Math.sin(this.elapsed * 0.73 + fighter.phase) * 0.075
       fighter.z = fighter.baseZ + Math.cos(this.elapsed * 0.61 + fighter.phase) * 0.058
-      fighter.root.position.set(fighter.x, 0.036 + Math.abs(Math.sin(stride)) * 0.009, fighter.z)
+      fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z) + 0.036 + Math.abs(Math.sin(stride)) * 0.009, fighter.z)
       fighter.root.rotation.y = (fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2) + Math.sin(this.elapsed * 0.8 + fighter.phase) * 0.075
       fighter.leftLeg.rotation.x = Math.sin(stride) * 0.29
       fighter.rightLeg.rotation.x = -Math.sin(stride) * 0.29
@@ -149,8 +159,8 @@ export class WarfrontVisual {
       tracer.mesh.visible = cycle < 0.42
       if (!tracer.mesh.visible) continue
       const progress = cycle / 0.42
-      this.tempStart.set(tracer.from.x, 0.17, tracer.from.z)
-      this.tempEnd.set(tracer.to.x, 0.16, tracer.to.z)
+      this.tempStart.set(tracer.from.x, surfaceY(tracer.from.x, tracer.from.z) + 0.17, tracer.from.z)
+      this.tempEnd.set(tracer.to.x, surfaceY(tracer.to.x, tracer.to.z) + 0.16, tracer.to.z)
       tracer.mesh.position.copy(this.tempStart).lerp(this.tempEnd, progress)
       tracer.mesh.position.y += Math.sin(progress * Math.PI) * 0.085
       this.tempDirection.copy(this.tempEnd).sub(this.tempStart).normalize()
@@ -159,7 +169,7 @@ export class WarfrontVisual {
 
     for (const smoke of this.smoke) {
       const rise = (this.elapsed * 0.19 + smoke.phase) % 1
-      smoke.mesh.position.set(smoke.baseX + Math.sin(this.elapsed * 0.7 + smoke.phase) * 0.035, 0.17 + rise * 0.54, smoke.baseZ)
+      smoke.mesh.position.set(smoke.baseX + Math.sin(this.elapsed * 0.7 + smoke.phase) * 0.035, surfaceY(smoke.baseX, smoke.baseZ) + 0.17 + rise * 0.54, smoke.baseZ)
       smoke.mesh.scale.setScalar(0.7 + rise * 1.8)
       smoke.mesh.material.opacity = (1 - rise) * 0.25
     }
@@ -170,6 +180,27 @@ export class WarfrontVisual {
       blast.mesh.scale.setScalar(0.18 + flare * 2.1)
       blast.mesh.material.opacity = (1 - flare) * 0.55
     }
+    for (const wave of this.shockwaves) {
+      const cycle = (this.elapsed * 0.31 + wave.phase) % 1
+      wave.mesh.visible = cycle < 0.23
+      if (!wave.mesh.visible) continue
+      const progress = cycle / 0.23
+      wave.mesh.scale.setScalar(0.15 + progress * 5.5)
+      wave.mesh.material.opacity = (1 - progress) * 0.48
+    }
+    for (const field of this.embers) {
+      for (let index = 0; index < field.positions.length; index++) {
+        const origin = field.positions[index]
+        const drift = (this.elapsed * 0.16 + field.phases[index]) % 1
+        this.dummy.position.set(origin.x + Math.sin(this.elapsed * 1.2 + index) * 0.035, origin.y + drift * 0.38, origin.z)
+        this.dummy.scale.setScalar((1 - drift) * 0.7 + 0.18)
+        this.dummy.updateMatrix()
+        field.mesh.setMatrixAt(index, this.dummy.matrix)
+      }
+      field.mesh.instanceMatrix.needsUpdate = true
+    }
+    const view = this.camera.position.clone().normalize()
+    for (const zone of this.battleZones) zone.root.visible = zone.normal.dot(view) > -0.05
   }
 
   dispose(): void {
@@ -186,6 +217,9 @@ export class WarfrontVisual {
     this.tracers.length = 0
     this.smoke.length = 0
     this.blasts.length = 0
+    this.shockwaves.length = 0
+    this.embers.length = 0
+    this.battleZones.length = 0
   }
 
   private addPlanet(globe: THREE.Group): void {
@@ -215,82 +249,106 @@ export class WarfrontVisual {
     ))
   }
 
+  private addSurfaceDetails(globe: THREE.Group): void {
+    const rockGeometry = this.geometry(new THREE.DodecahedronGeometry(0.065, 0))
+    const rockMaterial = this.material(new THREE.MeshStandardMaterial({ color: 0x303744, roughness: 1, flatShading: true }))
+    const rocks = new THREE.InstancedMesh(rockGeometry, rockMaterial, 620)
+    const ruinGeometry = this.geometry(new THREE.BoxGeometry(0.045, 0.16, 0.055))
+    const ruinMaterial = this.material(new THREE.MeshStandardMaterial({ color: 0x65717c, roughness: 0.9, metalness: 0.2, flatShading: true }))
+    const ruins = new THREE.InstancedMesh(ruinGeometry, ruinMaterial, 220)
+    const craterGeometry = this.geometry(new THREE.TorusGeometry(0.085, 0.012, 4, 9))
+    const craterMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0x101c27 }))
+    const craters = new THREE.InstancedMesh(craterGeometry, craterMaterial, 180)
+    const place = (mesh: THREE.InstancedMesh, count: number, seed: number, scale: number, lift: number): void => {
+      for (let index = 0; index < count; index++) {
+        const y = 1 - 2 * (index + 0.5) / count
+        const angle = index * Math.PI * (3 - Math.sqrt(5)) + seed + hash(index + seed) * 0.25
+        const radial = Math.sqrt(1 - y * y)
+        const normal = new THREE.Vector3(Math.cos(angle) * radial, y, Math.sin(angle) * radial)
+        this.dummy.position.copy(normal).multiplyScalar(PLANET_RADIUS + lift)
+        this.dummy.quaternion.setFromUnitVectors(mesh === craters ? FORWARD : UP, normal)
+        this.dummy.rotateY(hash(index * 19 + seed) * Math.PI * 2)
+        const variation = 0.45 + hash(index * 7 + seed) * 1.35
+        this.dummy.scale.set(scale * variation, scale * variation, scale * variation)
+        this.dummy.updateMatrix()
+        mesh.setMatrixAt(index, this.dummy.matrix)
+      }
+      mesh.instanceMatrix.needsUpdate = true
+      globe.add(mesh)
+    }
+    place(rocks, 620, 11, 1, 0.014)
+    place(ruins, 220, 73, 1, 0.065)
+    place(craters, 180, 137, 1, 0.027)
+  }
+
   private addBattlefield(globe: THREE.Group, normal: THREE.Vector3, zoneIndex: number): void {
     const zone = new THREE.Group()
     zone.name = `Battle sector ${zoneIndex + 1}`
     zone.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
     zone.quaternion.setFromUnitVectors(UP, normal)
     globe.add(zone)
+    this.battleZones.push({ root: zone, normal })
 
-    const ground = new THREE.Mesh(
-      this.geometry(new THREE.CylinderGeometry(1.08, 1.03, 0.055, 12)),
-      this.material(new THREE.MeshStandardMaterial({ color: 0x1d2530, roughness: 0.9, metalness: 0.18, flatShading: true })),
-    )
-    ground.position.y = 0.012
-    zone.add(ground)
-    const perimeter = new THREE.Mesh(
-      this.geometry(new THREE.TorusGeometry(0.99, 0.012, 4, 56)),
-      this.material(new THREE.MeshBasicMaterial({ color: 0xf37e3d, transparent: true, opacity: 0.35 })),
-    )
-    perimeter.rotation.x = -Math.PI / 2
-    perimeter.position.y = 0.044
-    zone.add(perimeter)
     for (const [side, color] of [[-1, BLUE], [1, RED]] as const) {
       const signal = new THREE.Mesh(
-        this.geometry(new THREE.BoxGeometry(0.018, 0.012, 0.68)),
+        this.boxGeometry(0.018, 0.012, 0.48),
         this.material(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.82 })),
       )
-      signal.position.set(side * 0.62, 0.052, 0)
+      signal.position.set(side * 0.42, surfaceY(side * 0.42, 0) + 0.016, 0)
       zone.add(signal)
     }
 
     const ruin = this.material(new THREE.MeshStandardMaterial({ color: 0x56616b, roughness: 0.78, metalness: 0.28, flatShading: true }))
     const scar = this.material(new THREE.MeshBasicMaterial({ color: 0xff7b39, transparent: true, opacity: 0.72 }))
-    for (let index = 0; index < 8; index++) {
-      const angle = index * Math.PI * 2 / 8 + zoneIndex * 0.31
-      const distance = 0.75 + hash(index * 3 + zoneIndex * 13) * 0.17
-      const height = 0.14 + hash(index * 19 + zoneIndex * 7) * 0.32
-      const wall = new THREE.Mesh(this.geometry(new THREE.BoxGeometry(0.14 + (index % 3) * 0.055, height, 0.11)), ruin)
-      wall.position.set(Math.cos(angle) * distance, height / 2 + 0.04, Math.sin(angle) * distance)
+    for (let index = 0; index < 13; index++) {
+      const angle = index * Math.PI * 2 / 13 + zoneIndex * 0.31
+      const distance = 0.38 + hash(index * 3 + zoneIndex * 13) * 0.27
+      const height = 0.11 + hash(index * 19 + zoneIndex * 7) * 0.22
+      const x = Math.cos(angle) * distance
+      const z = Math.sin(angle) * distance
+      const wall = new THREE.Mesh(this.boxGeometry(0.11 + (index % 3) * 0.035, height, 0.08), ruin)
+      wall.position.set(x, surfaceY(x, z) + height / 2 + 0.012, z)
       wall.rotation.set((index % 2 ? 1 : -1) * 0.1, angle + 0.4, (index % 3 - 1) * 0.13)
       zone.add(wall)
       if (index % 2 === 0) {
-        const crack = new THREE.Mesh(this.geometry(new THREE.BoxGeometry(0.24, 0.006, 0.012)), scar)
-        crack.position.set(Math.cos(angle) * (distance - 0.2), 0.046, Math.sin(angle) * (distance - 0.2))
+        const crackX = Math.cos(angle) * (distance - 0.08)
+        const crackZ = Math.sin(angle) * (distance - 0.08)
+        const crack = new THREE.Mesh(this.boxGeometry(0.16, 0.006, 0.012), scar)
+        crack.position.set(crackX, surfaceY(crackX, crackZ) + 0.012, crackZ)
         crack.rotation.y = angle
         zone.add(crack)
       }
     }
 
     for (const side of [-1, 1]) {
-      const x = side * 0.74
-      const z = side * 0.51
+      const x = side * 0.54
+      const z = side * 0.3
       const flame = new THREE.Mesh(
-        this.geometry(new THREE.ConeGeometry(0.072, 0.23, 5)),
+        this.geometry(new THREE.ConeGeometry(0.052, 0.16, 5)),
         this.material(new THREE.MeshBasicMaterial({ color: 0xff9e45, transparent: true, opacity: 0.82, depthWrite: false })),
       )
-      flame.position.set(x, 0.16, z)
+      flame.position.set(x, surfaceY(x, z) + 0.09, z)
       zone.add(flame)
-      for (let index = 0; index < 3; index++) {
+      for (let index = 0; index < 2; index++) {
         const mesh = new THREE.Mesh(
           this.geometry(new THREE.SphereGeometry(0.075, 6, 4)),
           this.material(new THREE.MeshBasicMaterial({ color: 0x89939b, transparent: true, opacity: 0.2, depthWrite: false })),
         )
         zone.add(mesh)
-        this.smoke.push({ mesh, baseX: x, baseZ: z, phase: (index + (side + 1) * 0.37) / 3 })
+        this.smoke.push({ mesh, baseX: x, baseZ: z, phase: (index + (side + 1) * 0.37) / 2 })
       }
     }
 
     const blue: Fighter[] = []
     const red: Fighter[] = []
-    for (let index = 0; index < 6; index++) {
+    for (let index = 0; index < 4; index++) {
       blue.push(this.addFighter(zone, 'blue', index, zoneIndex))
       red.push(this.addFighter(zone, 'red', index, zoneIndex))
     }
     const blueBolt = this.material(new THREE.MeshBasicMaterial({ color: 0x7ae7ff, blending: THREE.AdditiveBlending, depthWrite: false }))
     const redBolt = this.material(new THREE.MeshBasicMaterial({ color: 0xffaa65, blending: THREE.AdditiveBlending, depthWrite: false }))
     const boltGeometry = this.geometry(new THREE.BoxGeometry(0.018, 0.018, 0.19))
-    for (let index = 0; index < 10; index++) {
+    for (let index = 0; index < 7; index++) {
       const from = index % 2 ? red[index % red.length] : blue[index % blue.length]
       const to = index % 2 ? blue[(index + 2) % blue.length] : red[(index + 3) % red.length]
       const mesh = new THREE.Mesh(boltGeometry, from.team === 'blue' ? blueBolt : redBolt)
@@ -302,9 +360,33 @@ export class WarfrontVisual {
       this.geometry(new THREE.SphereGeometry(0.13, 10, 8)),
       this.material(new THREE.MeshBasicMaterial({ color: 0xff9c51, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })),
     )
-    blast.position.set(0.04, 0.14, (zoneIndex % 2 ? 1 : -1) * 0.23)
+    const blastZ = (zoneIndex % 2 ? 1 : -1) * 0.17
+    blast.position.set(0.04, surfaceY(0.04, blastZ) + 0.1, blastZ)
     zone.add(blast)
-    this.blasts.push({ mesh: blast, phase: zoneIndex * 0.21 })
+    const phase = hash(zoneIndex * 37) * 0.95
+    this.blasts.push({ mesh: blast, phase })
+    const wave = new THREE.Mesh(
+      this.geometry(new THREE.TorusGeometry(0.09, 0.008, 4, 20)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0xffac65, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })),
+    )
+    wave.rotation.x = -Math.PI / 2
+    wave.position.set(0.04, surfaceY(0.04, blastZ) + 0.018, blastZ)
+    zone.add(wave)
+    this.shockwaves.push({ mesh: wave, phase })
+    const emberGeometry = this.geometry(new THREE.TetrahedronGeometry(0.008))
+    const emberMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0xffaa58, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const emberMesh = new THREE.InstancedMesh(emberGeometry, emberMaterial, 14)
+    emberMesh.frustumCulled = false
+    zone.add(emberMesh)
+    const positions: THREE.Vector3[] = []
+    const phases: number[] = []
+    for (let index = 0; index < 14; index++) {
+      const x = (hash(index * 17 + zoneIndex * 3) - 0.5) * 0.95
+      const z = (hash(index * 23 + zoneIndex * 11) - 0.5) * 0.95
+      positions.push(new THREE.Vector3(x, surfaceY(x, z) + 0.04, z))
+      phases.push(hash(index * 29 + zoneIndex * 13))
+    }
+    this.embers.push({ mesh: emberMesh, positions, phases, zone })
   }
 
   private addFighter(zone: THREE.Group, team: Team, index: number, zoneIndex: number): Fighter {
@@ -348,8 +430,8 @@ export class WarfrontVisual {
     muzzle.visible = false
 
     const phase = index * 0.88 + zoneIndex * 1.3 + (team === 'red' ? 2.2 : 0)
-    const baseX = (team === 'blue' ? -0.37 : 0.37) + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.23
-    const baseZ = -0.47 + index * 0.185 + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.07
+    const baseX = (team === 'blue' ? -0.24 : 0.24) + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.14
+    const baseZ = -0.28 + index * 0.18 + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.08
     const fighter: Fighter = { root, leftArm, rightArm, leftLeg, rightLeg, muzzle, team, baseX, baseZ, phase, x: baseX, z: baseZ }
     this.fighters.push(fighter)
     return fighter
@@ -396,6 +478,10 @@ export class WarfrontVisual {
     this.materials.add(material)
     return material
   }
+}
+
+function surfaceY(x: number, z: number): number {
+  return Math.sqrt(Math.max(0, PLANET_RADIUS * PLANET_RADIUS - x * x - z * z)) - PLANET_RADIUS
 }
 
 function hash(value: number): number {

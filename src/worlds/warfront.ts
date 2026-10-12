@@ -57,7 +57,7 @@ const module: PlanetModule = {
     intro.append(
       el('span', 'warfront-kicker', 'SYSTEM ZERO / WARFRONT'),
       el('h1', '', 'A planet at war.'),
-      el('p', '', 'Orbit the scorched globe. Zoom toward a battle sector to watch tiny block soldiers cross fire between Blue and Red.'),
+      el('p', '', 'Orbit the scorched world. Blue and Red squads fight across its surface among craters, ruins, fire, and smoke. Zoom in anywhere the battle glows.'),
     )
     const legend = el('div', 'warfront-legend')
     legend.append(el('span', 'is-blue', 'BLUE SQUADS'), el('span', 'is-red', 'RED SQUADS'), el('span', 'warfront-observer-tag', 'OBSERVER MODE'))
