@@ -51,7 +51,7 @@ const module: PlanetModule = {
     const project = projects.find(item => item.key === 'survival-multiplayer')
     const root = el('div', 'warfront-ui')
     root.dataset.testid = 'warfront-observer'
-    root.setAttribute('aria-label', 'Warfront planet battle observer')
+    root.setAttribute('aria-label', 'Warfront planet battle')
 
     const intro = el('section', 'warfront-observer-card')
     intro.append(
@@ -62,6 +62,15 @@ const module: PlanetModule = {
     const legend = el('div', 'warfront-legend')
     legend.append(el('span', 'is-blue', 'BLUE SQUADS'), el('span', 'is-red', 'RED SQUADS'), el('span', 'warfront-observer-tag', 'OBSERVER MODE'))
     intro.append(legend)
+
+    const jumpIn = el('button', 'warfront-jump-in', 'Jump into battle ↓')
+    jumpIn.type = 'button'
+    jumpIn.addEventListener('click', () => {
+      if (!host.isInteractive()) return
+      visual.enterRandomSoldier()
+      syncMode()
+    })
+    intro.append(jumpIn)
 
     const controls = el('nav', 'warfront-controls')
     controls.setAttribute('aria-label', 'Warfront spectator camera')
@@ -80,6 +89,57 @@ const module: PlanetModule = {
     zoomIn.addEventListener('click', () => { if (host.isInteractive()) { visual.zoom(-100); updateZoom() } })
     controls.append(planet, battle, zoomOut, zoomValue, zoomIn)
 
+    const soldierHud = el('section', 'warfront-soldier-hud')
+    const teamLabel = el('span', 'warfront-soldier-team')
+    const weaponLabel = el('span', 'warfront-soldier-weapon')
+    const soldierHelp = el('p', '', 'WASD MOVE · DRAG AIM · CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT')
+    const weaponControls = el('div', 'warfront-soldier-actions')
+    const rifle = el('button', 'warfront-button', '1  Assault rifle')
+    const rocket = el('button', 'warfront-button', '2  Rocket launcher')
+    const leave = el('button', 'warfront-button', '↑ Observe planet')
+    for (const button of [rifle, rocket, leave]) button.type = 'button'
+    rifle.addEventListener('click', () => { visual.equip('rifle'); syncMode() })
+    rocket.addEventListener('click', () => { visual.equip('rocket'); syncMode() })
+    leave.addEventListener('click', () => { visual.leaveSoldier(); syncMode() })
+    weaponControls.append(rifle, rocket, leave)
+    soldierHud.append(teamLabel, weaponLabel, soldierHelp, weaponControls)
+
+    const touchControls = el('div', 'warfront-touch-controls')
+    const touchPad = el('div', 'warfront-touch-pad')
+    const touchActions = el('div', 'warfront-touch-actions')
+    const held = new Set<string>()
+    let mouseFiring = false
+    const bindHold = (button: HTMLButtonElement, action: string): void => {
+      button.type = 'button'
+      button.addEventListener('pointerdown', event => {
+        if (!visual.isPlaying || !host.isInteractive()) return
+        event.preventDefault()
+        button.setPointerCapture(event.pointerId)
+        held.add(action)
+        syncMovement()
+      })
+      const release = (): void => { held.delete(action); syncMovement() }
+      button.addEventListener('pointerup', release)
+      button.addEventListener('pointercancel', release)
+      button.addEventListener('lostpointercapture', release)
+    }
+    for (const [label, action] of [['▲', 'forward'], ['◀', 'left'], ['▼', 'back'], ['▶', 'right']] as const) {
+      const button = el('button', 'warfront-touch-button', label)
+      button.setAttribute('aria-label', action)
+      bindHold(button, action)
+      touchPad.append(button)
+    }
+    const fireButton = el('button', 'warfront-touch-button is-fire', 'FIRE')
+    bindHold(fireButton, 'fire')
+    const hopButton = el('button', 'warfront-touch-button', 'HOP')
+    hopButton.type = 'button'
+    hopButton.addEventListener('click', () => { if (host.isInteractive()) visual.jump() })
+    const swapButton = el('button', 'warfront-touch-button', 'SWAP')
+    swapButton.type = 'button'
+    swapButton.addEventListener('click', () => { if (host.isInteractive()) { visual.equip(visual.currentWeapon === 'rifle' ? 'rocket' : 'rifle'); syncMode() } })
+    touchActions.append(fireButton, hopButton, swapButton)
+    touchControls.append(touchPad, touchActions)
+
     const footer = el('aside', 'warfront-footer')
     footer.append(el('span', '', 'DRAG TO ORBIT  ·  SCROLL / PINCH TO ZOOM  ·  WATCH THE BATTLE'))
     const links = el('div', 'warfront-links')
@@ -91,13 +151,50 @@ const module: PlanetModule = {
     exit.addEventListener('click', () => host.onExit())
     links.append(exit)
     footer.append(links)
-    root.append(intro, controls, footer)
+    root.append(intro, controls, soldierHud, touchControls, footer)
     host.uiRoot.replaceChildren(root)
 
     function updateZoom(): void {
       zoomValue.textContent = `ZOOM ${visual.zoomPercent}%`
     }
+    function syncMode(): void {
+      const playing = visual.isPlaying
+      root.classList.toggle('is-playing', playing)
+      root.dataset.testid = playing ? 'warfront-soldier' : 'warfront-observer'
+      teamLabel.textContent = playing ? `${visual.playerTeam?.toUpperCase()} SQUAD · YOU ARE ON THE GROUND` : ''
+      teamLabel.classList.toggle('is-red', visual.playerTeam === 'red')
+      weaponLabel.textContent = visual.currentWeapon === 'rifle' ? 'ASSAULT RIFLE · AUTO' : 'ROCKET LAUNCHER · HEAVY'
+      rifle.classList.toggle('is-primary', visual.currentWeapon === 'rifle')
+      rocket.classList.toggle('is-primary', visual.currentWeapon === 'rocket')
+      if (!playing) { held.clear(); mouseFiring = false; visual.setFiring(false); visual.setMovement(0, 0, 0); updateZoom() }
+    }
     updateZoom()
+
+    const keys = new Set<string>()
+    function syncMovement(): void {
+      if (!visual.isPlaying || !host.isInteractive()) { visual.setMovement(0, 0, 0); visual.setFiring(false); return }
+      const forward = Number(keys.has('KeyW') || keys.has('ArrowUp') || held.has('forward')) - Number(keys.has('KeyS') || keys.has('ArrowDown') || held.has('back'))
+      const strafe = Number(keys.has('KeyD') || held.has('right')) - Number(keys.has('KeyA') || held.has('left'))
+      const turn = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'))
+      visual.setMovement(forward, strafe, turn)
+      visual.setFiring(held.has('fire') || mouseFiring)
+    }
+    const keyDown = (event: KeyboardEvent): void => {
+      if (!visual.isPlaying || !host.isInteractive() || event.altKey || event.ctrlKey || event.metaKey) return
+      if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault()
+      if (event.code === 'Space' && !event.repeat) visual.jump()
+      if (event.code === 'Digit1') { visual.equip('rifle'); syncMode() }
+      if (event.code === 'Digit2') { visual.equip('rocket'); syncMode() }
+      if (event.code === 'KeyV') { visual.leaveSoldier(); syncMode(); return }
+      keys.add(event.code)
+      syncMovement()
+    }
+    const keyUp = (event: KeyboardEvent): void => { keys.delete(event.code); syncMovement() }
+    const blur = (): void => { keys.clear(); held.clear(); mouseFiring = false; visual.setMovement(0, 0, 0); visual.setFiring(false) }
+    window.addEventListener('keydown', keyDown)
+    window.addEventListener('keyup', keyUp)
+    window.addEventListener('blur', blur)
 
     const pointers = new Map<number, { x: number; y: number }>()
     const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y)
@@ -105,13 +202,15 @@ const module: PlanetModule = {
       if (!host.isInteractive()) return
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       host.canvas.setPointerCapture(event.pointerId)
+      if (visual.isPlaying && event.pointerType === 'mouse' && event.button === 0) { mouseFiring = true; syncMovement() }
     }
     const pointerMove = (event: PointerEvent): void => {
       if (!host.isInteractive()) return
       const previous = pointers.get(event.pointerId)
       if (!previous) return
       const current = { x: event.clientX, y: event.clientY }
-      if (pointers.size === 1) visual.orbit(current.x - previous.x, current.y - previous.y)
+      if (visual.isPlaying) visual.aim(current.x - previous.x)
+      else if (pointers.size === 1) visual.orbit(current.x - previous.x, current.y - previous.y)
       else if (pointers.size === 2) {
         const other = [...pointers.entries()].find(([id]) => id !== event.pointerId)?.[1]
         if (other) { visual.zoom((distance(previous, other) - distance(current, other)) * 2); updateZoom() }
@@ -121,6 +220,7 @@ const module: PlanetModule = {
     const pointerEnd = (event: PointerEvent): void => {
       pointers.delete(event.pointerId)
       if (host.canvas.hasPointerCapture(event.pointerId)) host.canvas.releasePointerCapture(event.pointerId)
+      if (visual.isPlaying && event.pointerType === 'mouse') { mouseFiring = false; syncMovement() }
     }
     const wheel = (event: WheelEvent): void => {
       if (!host.isInteractive()) return
@@ -138,7 +238,7 @@ const module: PlanetModule = {
     return {
       scene: visual.scene,
       camera: visual.camera,
-      update(dt: number) { visual.update(dt) },
+      update(dt: number) { if (!host.isInteractive()) syncMovement(); visual.update(dt) },
       dispose() {
         if (disposed) return
         disposed = true
@@ -147,6 +247,9 @@ const module: PlanetModule = {
         host.canvas.removeEventListener('pointerup', pointerEnd)
         host.canvas.removeEventListener('pointercancel', pointerEnd)
         host.canvas.removeEventListener('wheel', wheel)
+        window.removeEventListener('keydown', keyDown)
+        window.removeEventListener('keyup', keyUp)
+        window.removeEventListener('blur', blur)
         for (const pointerId of pointers.keys()) {
           if (host.canvas.hasPointerCapture(pointerId)) host.canvas.releasePointerCapture(pointerId)
         }

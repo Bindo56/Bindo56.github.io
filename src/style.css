@@ -1707,7 +1707,7 @@ a { color: inherit; }
   .bitroom-game .bitroom-game-hint-button { min-height: 44px; }
 }
 
-/* Warfront begins as a planet-scale spectator scene. */
+/* Warfront spectator and ground views. */
 .warfront-ui { position: absolute; inset: 0; color: #eaf2f7; font-family: 'IBM Plex Mono', Consolas, monospace; pointer-events: none; }
 .warfront-observer-card, .warfront-controls, .warfront-footer { position: absolute; pointer-events: auto; }
 .warfront-observer-card {
@@ -1760,6 +1760,18 @@ a { color: inherit; }
 .warfront-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .warfront-ui .warfront-link, .warfront-ui .warfront-exit { display: inline-flex; align-items: center; min-height: 32px; padding: 6px 8px; font-size: 10px; }
 .warfront-ui .warfront-exit { border-color: rgba(255, 176, 118, .6); }
+.warfront-ui .warfront-jump-in { width: 100%; margin-top: 15px; border-color: #ffb076; background: #4c3028; color: #fff0d9; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.warfront-soldier-hud { position: absolute; top: 96px; left: 18px; display: none; width: min(400px, calc(100vw - 36px)); padding: 13px 15px; border: 1px solid rgba(125, 170, 190, .48); background: rgba(6, 16, 28, .87); box-shadow: 0 15px 40px rgba(0, 0, 0, .3); pointer-events: auto; backdrop-filter: blur(12px); }
+.warfront-soldier-team { display: block; color: #7dd7ff; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.warfront-soldier-team.is-red { color: #ff9a8c; }
+.warfront-soldier-weapon { display: block; margin-top: 5px; color: #ffcb98; font-size: 10px; font-weight: 700; letter-spacing: .06em; }
+.warfront-soldier-hud p { margin: 9px 0; color: #b4c7d4; font-size: 9px; line-height: 1.5; }
+.warfront-soldier-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.warfront-soldier-actions button { min-height: 30px; padding: 6px; font-size: 9px; }
+.warfront-touch-controls { display: none; }
+.warfront-ui.is-playing .warfront-observer-card, .warfront-ui.is-playing .warfront-controls, .warfront-ui.is-playing .warfront-footer { display: none; }
+.warfront-ui.is-playing .warfront-soldier-hud { display: block; }
+.warfront-ui.is-playing::after { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; margin: -4px; border: 1px solid rgba(255, 238, 193, .92); border-radius: 50%; box-shadow: 0 0 0 3px rgba(5, 14, 25, .5); content: ''; pointer-events: none; }
 @media (max-width: 850px) {
   .warfront-footer { bottom: 78px; }
 }
@@ -1774,6 +1786,11 @@ a { color: inherit; }
   .warfront-zoom-value { min-width: 45px; font-size: 8px; }
   .warfront-footer { right: 8px; bottom: calc(65px + env(safe-area-inset-bottom)); left: 8px; max-width: none; font-size: 8px; }
   .warfront-ui .warfront-link, .warfront-ui .warfront-exit { min-height: 30px; padding: 5px 6px; font-size: 8px; }
+  .warfront-ui .warfront-jump-in { min-height: 36px; margin-top: 9px; font-size: 10px; }
+  .warfront-soldier-hud { top: 103px; right: 8px; left: 8px; width: auto; padding: 9px; }
+  .warfront-soldier-hud p { display: none; }
+  .warfront-soldier-actions { margin-top: 7px; }
+  .warfront-soldier-actions button { font-size: 8px; }
 }
 @media (max-height: 520px) and (pointer: coarse) {
   .warfront-observer-card { top: 72px; right: auto; width: min(250px, 45vw); }
@@ -1783,4 +1800,13 @@ a { color: inherit; }
 }
 @media (pointer: coarse) {
   .warfront-ui button, .warfront-link { min-height: 44px; }
+  .warfront-ui.is-playing .warfront-touch-controls { position: absolute; right: 10px; bottom: calc(12px + env(safe-area-inset-bottom)); left: 10px; display: flex; justify-content: space-between; align-items: end; pointer-events: none; }
+  .warfront-touch-pad { display: grid; grid-template-columns: repeat(3, 48px); grid-template-rows: repeat(2, 48px); gap: 3px; pointer-events: auto; }
+  .warfront-touch-pad button:nth-child(1) { grid-column: 2; grid-row: 1; }
+  .warfront-touch-pad button:nth-child(2) { grid-column: 1; grid-row: 2; }
+  .warfront-touch-pad button:nth-child(3) { grid-column: 2; grid-row: 2; }
+  .warfront-touch-pad button:nth-child(4) { grid-column: 3; grid-row: 2; }
+  .warfront-touch-actions { display: flex; gap: 5px; align-items: end; pointer-events: auto; }
+  .warfront-ui .warfront-touch-button { min-width: 46px; min-height: 46px; padding: 5px; border-color: rgba(166, 207, 222, .65); background: rgba(14, 35, 50, .88); touch-action: none; user-select: none; }
+  .warfront-ui .warfront-touch-button.is-fire { min-width: 62px; min-height: 62px; border-color: #ffb076; background: rgba(97, 43, 31, .94); color: #fff0db; }
 }

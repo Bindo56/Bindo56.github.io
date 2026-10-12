@@ -6,10 +6,12 @@ const FORWARD = new THREE.Vector3(0, 0, 1)
 const BLUE = 0x4ebaff
 const RED = 0xff6658
 
-type Team = 'blue' | 'red'
+export type Team = 'blue' | 'red'
+export type Weapon = 'rifle' | 'rocket'
 
 interface Fighter {
   root: THREE.Group
+  zone: THREE.Group
   leftArm: THREE.Group
   rightArm: THREE.Group
   leftLeg: THREE.Group
@@ -21,6 +23,16 @@ interface Fighter {
   phase: number
   x: number
   z: number
+  stunnedUntil: number
+}
+
+interface Shot {
+  mesh: THREE.Mesh
+  direction: THREE.Vector3
+  speed: number
+  life: number
+  rocket: boolean
+  target: Fighter | null
 }
 
 interface BattleZone {
@@ -52,6 +64,8 @@ export class WarfrontVisual {
   private readonly boxCache = new Map<string, THREE.BoxGeometry>()
   private readonly fighterMaterialCache = new Map<string, THREE.Material>()
   private readonly fighters: Fighter[] = []
+  private readonly shots: Shot[] = []
+  private readonly impacts: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; life: number }[] = []
   private readonly battleZones: BattleZone[] = []
   private readonly tracers: Tracer[] = []
   private readonly smoke: Smoke[] = []
@@ -59,6 +73,8 @@ export class WarfrontVisual {
   private readonly shockwaves: { mesh: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
   private readonly embers: { mesh: THREE.InstancedMesh; positions: THREE.Vector3[]; phases: number[]; zone: THREE.Group }[] = []
   private readonly dummy = new THREE.Object3D()
+  private readonly globe = new THREE.Group()
+  private readonly playerAnchor = new THREE.Group()
   private readonly tempStart = new THREE.Vector3()
   private readonly tempEnd = new THREE.Vector3()
   private readonly tempDirection = new THREE.Vector3()
@@ -69,6 +85,17 @@ export class WarfrontVisual {
   private targetAzimuth = 0
   private targetElevation = 0.16
   private targetDistance = 12.8
+  private selected: Fighter | null = null
+  private weapon: Weapon = 'rifle'
+  private heading = 0
+  private moveForward = 0
+  private moveStrafe = 0
+  private turnSpeed = 0
+  private firing = false
+  private nextShot = 0
+  private hopTime = 0
+  private entryProgress = 1
+  private readonly entryCamera = new THREE.Vector3()
   private disposed = false
   private readonly reducedMotion = typeof window !== 'undefined'
     && typeof window.matchMedia === 'function'
@@ -86,30 +113,30 @@ export class WarfrontVisual {
     this.scene.add(rim)
 
     this.addStars()
-    const globe = new THREE.Group()
-    globe.name = 'Warfront planet'
-    this.scene.add(globe)
-    this.addPlanet(globe)
+    this.globe.name = 'Warfront planet'
+    this.scene.add(this.globe)
+    this.addPlanet(this.globe)
+    this.globe.add(this.playerAnchor)
 
-    this.addSurfaceDetails(globe)
+    this.addSurfaceDetails(this.globe)
     // Fibonacci spacing covers both hemispheres without a repeated latitude pattern.
     for (let index = 0; index < 28; index++) {
       const y = 1 - 2 * (index + 0.5) / 28
       const radius = Math.sqrt(1 - y * y)
       const angle = index * Math.PI * (3 - Math.sqrt(5))
-      this.addBattlefield(globe, new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius), index)
+      this.addBattlefield(this.globe, new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius), index)
     }
     this.update(0)
   }
 
   orbit(deltaX: number, deltaY: number): void {
-    if (this.disposed) return
+    if (this.disposed || this.selected) return
     this.targetAzimuth -= deltaX * 0.0046
     this.targetElevation = THREE.MathUtils.clamp(this.targetElevation + deltaY * 0.0046, -1.18, 1.18)
   }
 
   zoom(delta: number): void {
-    if (this.disposed) return
+    if (this.disposed || this.selected) return
     this.targetDistance = THREE.MathUtils.clamp(this.targetDistance + delta * 0.013, 4.75, 15)
   }
 
@@ -129,19 +156,83 @@ export class WarfrontVisual {
     return Math.round((15 - this.targetDistance) / (15 - 4.75) * 100)
   }
 
+  get isPlaying(): boolean { return this.selected !== null }
+  get playerTeam(): Team | null { return this.selected?.team ?? null }
+  get currentWeapon(): Weapon { return this.weapon }
+
+  enterRandomSoldier(): Team {
+    if (this.selected) return this.selected.team
+    const fighter = this.fighters[Math.floor(Math.random() * this.fighters.length)]
+    this.selected = fighter
+    this.heading = fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
+    this.weapon = 'rifle'
+    this.nextShot = 0
+    this.firing = false
+    this.hopTime = 0
+    this.entryProgress = 0
+    this.entryCamera.copy(this.camera.position)
+    const start = fighter.zone.localToWorld(new THREE.Vector3(fighter.x, surfaceY(fighter.x, fighter.z), fighter.z))
+    const normal = start.normalize()
+    this.playerAnchor.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
+    this.playerAnchor.quaternion.setFromUnitVectors(UP, normal)
+    this.playerAnchor.add(fighter.root)
+    fighter.root.position.set(0, 0.036, 0)
+    fighter.root.rotation.y = this.heading
+    this.camera.fov = 61
+    this.camera.near = 0.015
+    this.camera.updateProjectionMatrix()
+    return fighter.team
+  }
+
+  leaveSoldier(): void {
+    const fighter = this.selected
+    if (!fighter) return
+    this.selected = null
+    this.firing = false
+    this.moveForward = this.moveStrafe = this.turnSpeed = 0
+    fighter.zone.add(fighter.root)
+    fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z) + 0.036, fighter.z)
+    this.camera.fov = 48
+    this.camera.near = 0.1
+    this.camera.up.copy(UP)
+    this.camera.updateProjectionMatrix()
+    const normal = this.playerAnchor.position.clone().normalize()
+    this.targetAzimuth = Math.atan2(normal.x, normal.z)
+    this.targetElevation = Math.asin(normal.y)
+    this.targetDistance = 5.6
+    this.azimuth = this.targetAzimuth
+    this.elevation = this.targetElevation
+    this.distance = this.targetDistance
+  }
+
+  setMovement(forward: number, strafe: number, turn: number): void {
+    this.moveForward = THREE.MathUtils.clamp(forward, -1, 1)
+    this.moveStrafe = THREE.MathUtils.clamp(strafe, -1, 1)
+    this.turnSpeed = THREE.MathUtils.clamp(turn, -1, 1)
+  }
+
+  aim(deltaX: number): void { if (this.selected) this.heading -= deltaX * 0.006 }
+  jump(): void { if (this.selected && this.hopTime <= 0) this.hopTime = 0.52 }
+  equip(weapon: Weapon): void { this.weapon = weapon }
+  setFiring(value: boolean): void { this.firing = value && this.selected !== null }
+
   update(dt: number): void {
     if (this.disposed) return
     const frame = Number.isFinite(dt) ? THREE.MathUtils.clamp(dt, 0, 0.08) : 0
     this.elapsed += frame
-    const easing = this.reducedMotion ? 1 : 1 - Math.exp(-6 * frame)
-    this.azimuth += (this.targetAzimuth - this.azimuth) * easing
-    this.elevation += (this.targetElevation - this.elevation) * easing
-    this.distance += (this.targetDistance - this.distance) * easing
-    const horizontal = Math.cos(this.elevation) * this.distance
-    this.camera.position.set(Math.sin(this.azimuth) * horizontal, Math.sin(this.elevation) * this.distance, Math.cos(this.azimuth) * horizontal)
-    this.camera.lookAt(0, 0, 0)
+    if (this.selected) this.updatePlayer(frame)
+    else {
+      const easing = this.reducedMotion ? 1 : 1 - Math.exp(-6 * frame)
+      this.azimuth += (this.targetAzimuth - this.azimuth) * easing
+      this.elevation += (this.targetElevation - this.elevation) * easing
+      this.distance += (this.targetDistance - this.distance) * easing
+      const horizontal = Math.cos(this.elevation) * this.distance
+      this.camera.position.set(Math.sin(this.azimuth) * horizontal, Math.sin(this.elevation) * this.distance, Math.cos(this.azimuth) * horizontal)
+      this.camera.lookAt(0, 0, 0)
+    }
 
     for (const fighter of this.fighters) {
+      if (fighter === this.selected) continue
       const stride = this.elapsed * 2.9 + fighter.phase
       fighter.x = fighter.baseX + Math.sin(this.elapsed * 0.73 + fighter.phase) * 0.075
       fighter.z = fighter.baseZ + Math.cos(this.elapsed * 0.61 + fighter.phase) * 0.058
@@ -152,9 +243,11 @@ export class WarfrontVisual {
       fighter.leftArm.rotation.x = -Math.sin(stride) * 0.09
       fighter.rightArm.rotation.x = Math.sin(stride) * 0.09
       fighter.muzzle.visible = Math.sin(this.elapsed * 6.8 + fighter.phase * 2.3) > 0.97
+      fighter.root.rotation.z = this.elapsed < fighter.stunnedUntil ? 0.5 : 0
     }
 
     for (const tracer of this.tracers) {
+      if (tracer.from === this.selected || tracer.to === this.selected) { tracer.mesh.visible = false; continue }
       const cycle = (this.elapsed * 1.15 + tracer.phase) % 1.9
       tracer.mesh.visible = cycle < 0.42
       if (!tracer.mesh.visible) continue
@@ -199,13 +292,133 @@ export class WarfrontVisual {
       }
       field.mesh.instanceMatrix.needsUpdate = true
     }
+    this.updateShots(frame)
     const view = this.camera.position.clone().normalize()
-    for (const zone of this.battleZones) zone.root.visible = zone.normal.dot(view) > -0.05
+    for (const zone of this.battleZones) zone.root.visible = zone.normal.dot(view) > (this.selected ? 0.55 : -0.05)
+  }
+
+  private updatePlayer(frame: number): void {
+    const fighter = this.selected
+    if (!fighter) return
+    this.heading += this.turnSpeed * frame * 2.3
+    const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading))
+    const right = new THREE.Vector3(forward.z, 0, -forward.x)
+    const movement = forward.clone().multiplyScalar(this.moveForward).addScaledVector(right, this.moveStrafe)
+    if (movement.lengthSq() > 1) movement.normalize()
+    if (movement.lengthSq() > 0) {
+      const tangent = movement.applyQuaternion(this.playerAnchor.quaternion)
+      const normal = this.playerAnchor.position.clone().normalize().addScaledVector(tangent, frame * 0.47 / PLANET_RADIUS).normalize()
+      this.playerAnchor.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
+      this.playerAnchor.quaternion.setFromUnitVectors(UP, normal)
+    }
+    if (this.hopTime > 0) this.hopTime = Math.max(0, this.hopTime - frame)
+    const hop = this.hopTime > 0 ? Math.sin((1 - this.hopTime / 0.52) * Math.PI) * 0.11 : 0
+    fighter.root.position.set(0, 0.036 + hop, 0)
+    fighter.root.rotation.y = this.heading
+    const stride = this.elapsed * 12
+    const walk = movement.lengthSq() > 0 ? 0.38 : 0.045
+    fighter.leftLeg.rotation.x = Math.sin(stride) * walk
+    fighter.rightLeg.rotation.x = -Math.sin(stride) * walk
+    fighter.leftArm.rotation.x = -Math.sin(stride) * walk * 0.4
+    fighter.rightArm.rotation.x = Math.sin(stride) * walk * 0.4
+    fighter.muzzle.visible = false
+
+    this.globe.updateMatrixWorld(true)
+    const normal = this.playerAnchor.position.clone().normalize()
+    const worldForward = forward.applyQuaternion(this.playerAnchor.quaternion)
+    const target = normal.clone().multiplyScalar(PLANET_RADIUS + 0.19).addScaledVector(worldForward, 0.39)
+    const desired = normal.clone().multiplyScalar(PLANET_RADIUS + 0.48).addScaledVector(worldForward, -0.72)
+    desired.addScaledVector(right.applyQuaternion(this.playerAnchor.quaternion), 0.14)
+    if (this.entryProgress < 1) {
+      this.entryProgress = Math.min(1, this.entryProgress + frame / 0.75)
+      const t = this.reducedMotion ? 1 : this.entryProgress * this.entryProgress * (3 - 2 * this.entryProgress)
+      this.camera.position.copy(this.entryCamera).lerp(desired, t)
+    } else this.camera.position.lerp(desired, this.reducedMotion ? 1 : 1 - Math.exp(-9 * frame))
+    this.camera.up.copy(normal)
+    this.camera.lookAt(target)
+    if (this.firing && this.elapsed >= this.nextShot) this.fire()
+  }
+
+  private fire(): void {
+    const fighter = this.selected
+    if (!fighter) return
+    const rocket = this.weapon === 'rocket'
+    this.nextShot = this.elapsed + (rocket ? 1.1 : 0.14)
+    fighter.muzzle.visible = true
+    this.globe.updateMatrixWorld(true)
+    const normal = this.playerAnchor.position.clone().normalize()
+    const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)).applyQuaternion(this.playerAnchor.quaternion)
+    const start = normal.clone().multiplyScalar(PLANET_RADIUS + 0.16).addScaledVector(forward, 0.17)
+    let target: Fighter | null = null
+    let best = rocket ? 1.9 : 1.25
+    for (const enemy of this.fighters) {
+      if (enemy.team === fighter.team || enemy === fighter || !enemy.zone.visible) continue
+      const position = enemy.root.getWorldPosition(new THREE.Vector3())
+      const to = position.sub(start)
+      const range = to.length()
+      if (range > best || to.normalize().dot(forward) < (rocket ? 0.78 : 0.91)) continue
+      best = range
+      target = enemy
+    }
+    const direction = target
+      ? target.root.getWorldPosition(new THREE.Vector3()).sub(start).normalize()
+      : forward.clone().addScaledVector(normal, 0.035).normalize()
+    const mesh = new THREE.Mesh(
+      rocket ? new THREE.ConeGeometry(0.025, 0.085, 6) : new THREE.BoxGeometry(0.009, 0.009, 0.07),
+      new THREE.MeshBasicMaterial({ color: rocket ? 0xffa34c : fighter.team === 'blue' ? 0xa7ecff : 0xffb0a0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    )
+    mesh.position.copy(start)
+    mesh.quaternion.setFromUnitVectors(rocket ? UP : FORWARD, direction)
+    this.scene.add(mesh)
+    this.shots.push({ mesh, direction, speed: rocket ? 2.4 : 6.5, life: rocket ? 0.9 : 0.28, rocket, target })
+  }
+
+  private updateShots(frame: number): void {
+    for (let index = this.shots.length - 1; index >= 0; index--) {
+      const shot = this.shots[index]
+      shot.life -= frame
+      shot.mesh.position.addScaledVector(shot.direction, frame * shot.speed)
+      const hit = shot.target && shot.mesh.position.distanceTo(shot.target.root.getWorldPosition(this.tempEnd)) < (shot.rocket ? 0.09 : 0.055)
+      if (shot.life > 0 && !hit && shot.mesh.position.length() > PLANET_RADIUS - 0.02) continue
+      if (hit && shot.target) shot.target.stunnedUntil = this.elapsed + (shot.rocket ? 1.4 : 0.24)
+      if (shot.rocket || hit) this.addImpact(shot.mesh.position, shot.rocket)
+      this.scene.remove(shot.mesh)
+      shot.mesh.geometry.dispose()
+      ;(shot.mesh.material as THREE.Material).dispose()
+      this.shots.splice(index, 1)
+    }
+    for (let index = this.impacts.length - 1; index >= 0; index--) {
+      const impact = this.impacts[index]
+      impact.life -= frame
+      if (impact.life <= 0) {
+        this.scene.remove(impact.mesh)
+        impact.mesh.geometry.dispose()
+        impact.mesh.material.dispose()
+        this.impacts.splice(index, 1)
+      } else {
+        impact.mesh.scale.setScalar((1 - impact.life / 0.34) * 2.6 + 0.1)
+        impact.mesh.material.opacity = impact.life / 0.34 * 0.75
+      }
+    }
+  }
+
+  private addImpact(position: THREE.Vector3, rocket: boolean): void {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(rocket ? 0.12 : 0.035, 8, 6),
+      new THREE.MeshBasicMaterial({ color: rocket ? 0xff8d3f : 0xffd28c, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }),
+    )
+    mesh.position.copy(position)
+    this.scene.add(mesh)
+    this.impacts.push({ mesh, life: 0.34 })
   }
 
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    for (const shot of this.shots) { shot.mesh.geometry.dispose(); (shot.mesh.material as THREE.Material).dispose() }
+    for (const impact of this.impacts) { impact.mesh.geometry.dispose(); impact.mesh.material.dispose() }
+    this.shots.length = 0
+    this.impacts.length = 0
     this.scene.clear()
     for (const geometry of this.geometries) geometry.dispose()
     for (const material of this.materials) material.dispose()
@@ -432,7 +645,7 @@ export class WarfrontVisual {
     const phase = index * 0.88 + zoneIndex * 1.3 + (team === 'red' ? 2.2 : 0)
     const baseX = (team === 'blue' ? -0.24 : 0.24) + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.14
     const baseZ = -0.28 + index * 0.18 + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.08
-    const fighter: Fighter = { root, leftArm, rightArm, leftLeg, rightLeg, muzzle, team, baseX, baseZ, phase, x: baseX, z: baseZ }
+    const fighter: Fighter = { root, zone, leftArm, rightArm, leftLeg, rightLeg, muzzle, team, baseX, baseZ, phase, x: baseX, z: baseZ, stunnedUntil: 0 }
     this.fighters.push(fighter)
     return fighter
   }
