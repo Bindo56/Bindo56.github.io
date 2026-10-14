@@ -1,5 +1,5 @@
 import { defineConfig } from 'vite'
-import { PLANET_SLUGS } from './src/worlds/registry.ts'
+import { PLANET_SLUGS } from './src/worlds/planetSlugs.ts'
 
 export default defineConfig({
   build: {

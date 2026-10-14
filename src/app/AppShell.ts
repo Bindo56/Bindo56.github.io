@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, Quaternion, SRGBColorSpace, Vector3, WebGLRenderer } from 'three'
+import { ACESFilmicToneMapping, PCFSoftShadowMap, Quaternion, SRGBColorSpace, Vector3, WebGLRenderer } from 'three'
 import { projects } from '../data/projects.ts'
 import { experience } from '../data/experience.ts'
 import { SpaceSession } from '../space/SpaceSession.ts'
@@ -20,7 +20,7 @@ const ENTER_RADIUS = 115
 const WORLD_TAGS: Record<string, string> = {
   voxel: 'VOXEL / ECS',
   'npc-ecs': 'NPC SYSTEMS',
-  'stretch-squash': 'ANIMATION',
+  'stretch-squash': 'ELASTIC JUNGLE',
   'drone-fleet': 'AI SIM',
   'event-horizon': 'PLAYABLE',
   warfront: 'MULTIPLAYER',
@@ -31,7 +31,7 @@ const WORLD_TAGS: Record<string, string> = {
 const WORLD_NOTES: Record<string, string> = {
   voxel: 'Destructible voxel gameplay systems.',
   'npc-ecs': 'ECS schedules and NPC behavior.',
-  'stretch-squash': 'Procedural character animation.',
+  'stretch-squash': 'A cartoon jungle where every prop stretches, squashes, and bounces back.',
   'drone-fleet': 'VR drone flight and AI simulation.',
   'event-horizon': 'Launch swarms in a gravity lab.',
   warfront: 'Replicated multiplayer combat.',
@@ -176,6 +176,8 @@ export class AppShell {
       const context = this.canvas.getContext('webgl2', { antialias: true, alpha: false })
       if (!context) throw new Error('WebGL 2 is unavailable')
       this.renderer = new WebGLRenderer({ canvas: this.canvas, context, antialias: true })
+      this.renderer.shadowMap.enabled = true
+      this.renderer.shadowMap.type = PCFSoftShadowMap
       this.renderer.outputColorSpace = SRGBColorSpace
       this.renderer.toneMapping = ACESFilmicToneMapping
       this.renderer.toneMappingExposure = 1.28
@@ -603,7 +605,9 @@ export class AppShell {
     this.selectPlanet(planet)
     if (push) history.pushState({ world: planet.slug }, '', pathForPlanet(planet))
     document.title = planet.title + ' | Saurabh Kundalwal'
-    this.canvas.setAttribute('aria-label', planet.slug === 'event-horizon'
+    this.canvas.setAttribute('aria-label', planet.slug === 'stretch-squash'
+      ? 'The Elastic Jungle: a fixed-camera 3D cartoon scene. Drag the land, trees, stones, and other props to stretch or squash them and watch them bounce back.'
+      : planet.slug === 'event-horizon'
       ? 'Solar DOTS gravity lab with five colored stone orbits around a black-hole shadow, a warm accretion disk, and one stylized light arc above the shadow. Drag to orbit the camera and scroll to zoom.'
       : planet.slug === 'bitboard'
         ? 'BitRoom interactive 64-bit floor. Select bits and logic operations in the lesson controls to route a signal.'
@@ -668,7 +672,7 @@ export class AppShell {
   }
 
   private showLanding(planet: PlanetDefinition): void {
-    if (planet.slug === 'event-horizon' || planet.slug === 'bitboard' || planet.slug === 'warfront') {
+    if (planet.slug === 'event-horizon' || planet.slug === 'bitboard' || planet.slug === 'warfront' || planet.slug === 'stretch-squash') {
       this.landing.hidden = true
       this.worldOverlay.hidden = false
       return
