@@ -32,7 +32,11 @@ interface Shot {
   mesh: THREE.Mesh
   trail: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>
   trailPoints: THREE.Vector3[]
-  velocity: THREE.Vector3
+  normal: THREE.Vector3
+  tangent: THREE.Vector3
+  height: number
+  verticalSpeed: number
+  speed: number
   life: number
   rocket: boolean
   team: Team
@@ -45,7 +49,7 @@ interface BattleZone {
 }
 
 interface BuildingObstacle {
-  foot: THREE.Vector3
+  normal: THREE.Vector3
   center: THREE.Vector3
   radius: number
   detail: THREE.Group
@@ -100,8 +104,8 @@ export class WarfrontVisual {
   private targetDistance = 12.8
   private selected: Fighter | null = null
   private weapon: Weapon = 'rifle'
-  private heading = 0
-  private pitch = -0.12
+  private readonly playerForward = new THREE.Vector3(0, 0, 1)
+  private pitch = -0.02
   private moveForward = 0
   private moveStrafe = 0
   private turnSpeed = 0
@@ -184,8 +188,8 @@ export class WarfrontVisual {
     fighter.health = 3
     fighter.root.visible = true
     this.selected = fighter
-    this.heading = fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
-    this.pitch = -0.12
+    const heading = fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
+    this.pitch = -0.02
     this.weapon = 'rifle'
     this.nextShot = 0
     this.firing = false
@@ -195,10 +199,11 @@ export class WarfrontVisual {
     const start = fighter.zone.localToWorld(new THREE.Vector3(fighter.x, surfaceY(fighter.x, fighter.z), fighter.z))
     const normal = start.normalize()
     this.playerAnchor.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
-    this.playerAnchor.quaternion.setFromUnitVectors(UP, normal)
+    this.playerForward.set(Math.sin(heading), 0, Math.cos(heading)).applyQuaternion(fighter.zone.getWorldQuaternion(new THREE.Quaternion()))
+    this.orientPlayer()
     this.playerAnchor.add(fighter.root)
     fighter.root.position.set(0, 0.036, 0)
-    fighter.root.rotation.y = this.heading
+    fighter.root.rotation.y = 0
     this.camera.fov = 61
     this.camera.near = 0.015
     this.camera.updateProjectionMatrix()
@@ -235,8 +240,17 @@ export class WarfrontVisual {
 
   aim(deltaX: number, deltaY: number): void {
     if (!this.selected) return
-    this.heading -= deltaX * 0.0035
+    this.playerForward.applyAxisAngle(this.playerAnchor.position.clone().normalize(), -deltaX * 0.0035)
+    this.orientPlayer()
     this.pitch = THREE.MathUtils.clamp(this.pitch - deltaY * 0.0028, -0.55, 0.45)
+  }
+
+  private orientPlayer(): void {
+    const normal = this.playerAnchor.position.clone().normalize()
+    this.playerForward.addScaledVector(normal, -this.playerForward.dot(normal)).normalize()
+    const basisX = normal.clone().cross(this.playerForward).normalize()
+    const basis = new THREE.Matrix4().makeBasis(basisX, normal, this.playerForward)
+    this.playerAnchor.quaternion.setFromRotationMatrix(basis)
   }
   jump(): void { if (this.selected && this.hopTime <= 0) this.hopTime = 0.52 }
   equip(weapon: Weapon): void { this.weapon = weapon }
@@ -335,25 +349,37 @@ export class WarfrontVisual {
   private updatePlayer(frame: number): void {
     const fighter = this.selected
     if (!fighter) return
-    this.heading += this.turnSpeed * frame * 2.3
-    const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading))
-    const right = new THREE.Vector3(-forward.z, 0, forward.x)
-    const movement = forward.clone().multiplyScalar(this.moveForward).addScaledVector(right, this.moveStrafe)
+    const oldNormal = this.playerAnchor.position.clone().normalize()
+    if (this.turnSpeed !== 0) {
+      this.playerForward.applyAxisAngle(oldNormal, -this.turnSpeed * frame * 2.3)
+      this.orientPlayer()
+    }
+    const right = this.playerForward.clone().cross(oldNormal).normalize()
+    const movement = this.playerForward.clone().multiplyScalar(this.moveForward).addScaledVector(right, this.moveStrafe)
     if (movement.lengthSq() > 1) movement.normalize()
     if (movement.lengthSq() > 0) {
-      const tangent = movement.applyQuaternion(this.playerAnchor.quaternion)
-      const normal = this.playerAnchor.position.clone().normalize().addScaledVector(tangent, frame * 0.47 / PLANET_RADIUS).normalize()
-      const nextPosition = normal.clone().multiplyScalar(PLANET_RADIUS + 0.012)
-      const blocked = this.buildingObstacles.some(building => building.detail.visible && nextPosition.distanceToSquared(building.foot) < 0.23 * 0.23)
-      if (!blocked) {
-        this.playerAnchor.position.copy(nextPosition)
-        this.playerAnchor.quaternion.setFromUnitVectors(UP, normal)
+      const distance = movement.length() * frame * 0.95
+      const arc = distance / PLANET_RADIUS
+      let nextNormal = oldNormal.clone().multiplyScalar(Math.cos(arc)).addScaledVector(movement.normalize(), Math.sin(arc)).normalize()
+      for (const building of this.buildingObstacles) {
+        if (!building.detail.visible) continue
+        const footNormal = building.normal
+        const minArc = 0.26 / PLANET_RADIUS
+        const dot = THREE.MathUtils.clamp(nextNormal.dot(footNormal), -1, 1)
+        if (Math.acos(dot) >= minArc) continue
+        const away = nextNormal.clone().addScaledVector(footNormal, -dot)
+        if (away.lengthSq() < 0.000001) away.copy(right).addScaledVector(footNormal, -right.dot(footNormal))
+        nextNormal = footNormal.clone().multiplyScalar(Math.cos(minArc)).addScaledVector(away.normalize(), Math.sin(minArc)).normalize()
       }
+      const transport = new THREE.Quaternion().setFromUnitVectors(oldNormal, nextNormal)
+      this.playerForward.applyQuaternion(transport)
+      this.playerAnchor.position.copy(nextNormal).multiplyScalar(PLANET_RADIUS + 0.012)
+      this.orientPlayer()
     }
     if (this.hopTime > 0) this.hopTime = Math.max(0, this.hopTime - frame)
     const hop = this.hopTime > 0 ? Math.sin((1 - this.hopTime / 0.52) * Math.PI) * 0.11 : 0
     fighter.root.position.set(0, 0.036 + hop, 0)
-    fighter.root.rotation.y = this.heading
+    fighter.root.rotation.y = 0
     const stride = this.elapsed * 12
     const walk = movement.lengthSq() > 0 ? 0.38 : 0.045
     fighter.leftLeg.rotation.x = Math.sin(stride) * walk
@@ -364,10 +390,13 @@ export class WarfrontVisual {
 
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
-    const worldForward = forward.applyQuaternion(this.playerAnchor.quaternion)
+    const worldForward = this.playerForward
     const aimDirection = worldForward.clone().addScaledVector(normal, this.pitch).normalize()
     const desired = normal.clone().multiplyScalar(PLANET_RADIUS + 0.48).addScaledVector(worldForward, -0.72)
-    desired.addScaledVector(right.applyQuaternion(this.playerAnchor.quaternion), 0.14)
+    desired.addScaledVector(worldForward.clone().cross(normal).normalize(), 0.14)
+    if (this.buildingObstacles.some(building => building.detail.visible && desired.distanceToSquared(building.center) < 0.48 * 0.48)) {
+      desired.addScaledVector(normal, 0.65)
+    }
     if (this.entryProgress < 1) {
       this.entryProgress = Math.min(1, this.entryProgress + frame / 0.75)
       const t = this.reducedMotion ? 1 : this.entryProgress * this.entryProgress * (3 - 2 * this.entryProgress)
@@ -386,10 +415,10 @@ export class WarfrontVisual {
     fighter.muzzle.visible = true
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
-    const forward = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading)).applyQuaternion(this.playerAnchor.quaternion)
-    const start = normal.clone().multiplyScalar(PLANET_RADIUS + 0.18).addScaledVector(forward, 0.17)
-    const direction = forward.addScaledVector(normal, this.pitch).normalize()
-    const velocity = direction.clone().multiplyScalar(rocket ? 3.4 : 5.1)
+    const shotNormal = normal.clone().addScaledVector(this.playerForward, 0.17 / PLANET_RADIUS).normalize()
+    const tangent = this.playerForward.clone().addScaledVector(shotNormal, -this.playerForward.dot(shotNormal)).normalize()
+    const start = shotNormal.clone().multiplyScalar(PLANET_RADIUS + 0.18)
+    const direction = tangent.clone().addScaledVector(shotNormal, this.pitch).normalize()
     const mesh = new THREE.Mesh(
       rocket ? new THREE.ConeGeometry(0.025, 0.085, 6) : new THREE.BoxGeometry(0.009, 0.009, 0.07),
       new THREE.MeshBasicMaterial({ color: rocket ? 0xffa34c : fighter.team === 'blue' ? 0xa7ecff : 0xffb0a0, blending: THREE.AdditiveBlending, depthWrite: false }),
@@ -406,7 +435,7 @@ export class WarfrontVisual {
     }))
     trail.frustumCulled = false
     this.scene.add(trail)
-    this.shots.push({ mesh, trail, trailPoints: [start.clone()], velocity, life: rocket ? 2.1 : 1.3, rocket, team: fighter.team })
+    this.shots.push({ mesh, trail, trailPoints: [start.clone()], normal: shotNormal, tangent, height: 0.18, verticalSpeed: this.pitch * 1.5, speed: rocket ? 4.3 : 6.2, life: rocket ? 2.2 : 1.6, rocket, team: fighter.team })
   }
 
   private updateShots(frame: number): void {
@@ -418,9 +447,13 @@ export class WarfrontVisual {
       const step = frame / steps
       for (let substep = 0; substep < steps && !impact; substep++) {
         const previous = shot.mesh.position.clone()
-        const gravity = previous.clone().normalize().multiplyScalar(shot.rocket ? -3.7 : -8.1)
-        shot.velocity.addScaledVector(gravity, step)
-        const next = previous.clone().addScaledVector(shot.velocity, step)
+        const axis = shot.normal.clone().cross(shot.tangent).normalize()
+        const angle = shot.speed * step / (PLANET_RADIUS + Math.max(shot.height, 0.02))
+        shot.normal.applyAxisAngle(axis, angle).normalize()
+        shot.tangent.applyAxisAngle(axis, angle).normalize()
+        shot.verticalSpeed -= (shot.rocket ? 0.12 : 0.18) * step
+        shot.height += shot.verticalSpeed * step
+        const next = shot.normal.clone().multiplyScalar(PLANET_RADIUS + Math.max(shot.height, 0.02))
         const segment = this.tempDirection.copy(next).sub(previous)
         const segmentLength = Math.max(segment.lengthSq(), 0.000001)
         for (const building of this.buildingObstacles) {
@@ -434,8 +467,8 @@ export class WarfrontVisual {
         }
         if (impact) break
         for (const enemy of this.fighters) {
-          if (enemy.team === shot.team || enemy === this.selected || enemy.health <= 0 || !enemy.zone.visible) continue
-          const position = enemy.root.getWorldPosition(this.tempEnd)
+          if (enemy.team === shot.team || enemy === this.selected || enemy.health <= 0) continue
+          const position = enemy.root.getWorldPosition(this.tempEnd).addScaledVector(enemy.zone.position, 0.13 / enemy.zone.position.length())
           const along = THREE.MathUtils.clamp(((position.x - previous.x) * segment.x + (position.y - previous.y) * segment.y + (position.z - previous.z) * segment.z) / segmentLength, 0, 1)
           this.tempStart.copy(previous).addScaledVector(segment, along)
           if (this.tempStart.distanceToSquared(position) > (shot.rocket ? 0.16 : 0.11) ** 2) continue
@@ -445,17 +478,14 @@ export class WarfrontVisual {
           break
         }
         if (impact) break
-        const ground = PLANET_RADIUS + 0.015
-        if (next.lengthSq() <= ground * ground) {
-          const oldRadius = previous.length()
-          const newRadius = next.length()
-          const fraction = THREE.MathUtils.clamp((oldRadius - ground) / Math.max(oldRadius - newRadius, 0.000001), 0, 1)
-          shot.mesh.position.copy(previous).lerp(next, fraction)
+        if (shot.height <= 0.02) {
+          shot.mesh.position.copy(shot.normal).multiplyScalar(PLANET_RADIUS + 0.02)
           impact = true
           break
         }
         shot.mesh.position.copy(next)
-        shot.mesh.quaternion.setFromUnitVectors(shot.rocket ? UP : FORWARD, shot.velocity.clone().normalize())
+        const flightDirection = shot.tangent.clone().multiplyScalar(shot.speed).addScaledVector(shot.normal, shot.verticalSpeed).normalize()
+        shot.mesh.quaternion.setFromUnitVectors(shot.rocket ? UP : FORWARD, flightDirection)
       }
       shot.trailPoints.push(shot.mesh.position.clone())
       if (shot.trailPoints.length > 14) shot.trailPoints.shift()
@@ -467,7 +497,7 @@ export class WarfrontVisual {
       if (impact) {
         if (shot.rocket) {
           for (const enemy of this.fighters) {
-            if (enemy.team === shot.team || enemy === this.selected || enemy.health <= 0 || !enemy.zone.visible) continue
+            if (enemy.team === shot.team || enemy === this.selected || enemy.health <= 0) continue
             if (enemy.root.getWorldPosition(this.tempEnd).distanceToSquared(shot.mesh.position) < 0.38 * 0.38) this.damageFighter(enemy, 3)
           }
         }
@@ -628,9 +658,9 @@ export class WarfrontVisual {
       building.position.set(x, surfaceY(x, z) + 0.012, z)
       building.rotation.y = angle + 0.6
       detail.add(building)
-      const foot = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + 0.012, z))
+      const footNormal = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + 0.012, z)).normalize()
       const center = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + height * 0.48, z))
-      this.buildingObstacles.push({ foot, center, radius: 0.24, detail })
+      this.buildingObstacles.push({ normal: footNormal, center, radius: 0.33, detail })
       box(building, 0.42, 0.045, 0.32, scorched, 0, 0.022, 0)
       box(building, 0.075, height, 0.24, concrete, -0.16, height / 2, -0.035)
       box(building, 0.075, height * 0.74, 0.24, concrete, 0.16, height * 0.37, -0.035)
