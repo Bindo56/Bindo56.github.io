@@ -95,16 +95,18 @@ const module: PlanetModule = {
     const weaponLabel = el('span', 'warfront-soldier-weapon')
     const killLabel = el('strong', 'warfront-kill-count')
     killLabel.setAttribute('aria-live', 'polite')
-    const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT')
+    const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT')
     const weaponControls = el('div', 'warfront-soldier-actions')
     const rifle = el('button', 'warfront-button', '1  Assault rifle')
     const rocket = el('button', 'warfront-button', '2  Rocket launcher')
+    const scattergun = el('button', 'warfront-button', '3  Scattergun')
     const leave = el('button', 'warfront-button', '↑ Observe planet')
-    for (const button of [rifle, rocket, leave]) button.type = 'button'
+    for (const button of [rifle, rocket, scattergun, leave]) button.type = 'button'
     rifle.addEventListener('click', () => { visual.equip('rifle'); syncMode() })
     rocket.addEventListener('click', () => { visual.equip('rocket'); syncMode() })
+    scattergun.addEventListener('click', () => { visual.equip('scattergun'); syncMode() })
     leave.addEventListener('click', () => { releaseAim(); visual.leaveSoldier(); syncMode() })
-    weaponControls.append(rifle, rocket, leave)
+    weaponControls.append(rifle, rocket, scattergun, leave)
     soldierHud.append(teamLabel, weaponLabel, killLabel, soldierHelp, weaponControls)
 
     const touchControls = el('div', 'warfront-touch-controls')
@@ -139,7 +141,11 @@ const module: PlanetModule = {
     hopButton.addEventListener('click', () => { if (host.isInteractive()) visual.jump() })
     const swapButton = el('button', 'warfront-touch-button', 'SWAP')
     swapButton.type = 'button'
-    swapButton.addEventListener('click', () => { if (host.isInteractive()) { visual.equip(visual.currentWeapon === 'rifle' ? 'rocket' : 'rifle'); syncMode() } })
+    swapButton.addEventListener('click', () => {
+      if (!host.isInteractive()) return
+      visual.equip(visual.currentWeapon === 'rifle' ? 'rocket' : visual.currentWeapon === 'rocket' ? 'scattergun' : 'rifle')
+      syncMode()
+    })
     touchActions.append(fireButton, hopButton, swapButton)
     touchControls.append(touchPad, touchActions)
 
@@ -166,13 +172,14 @@ const module: PlanetModule = {
       root.dataset.testid = playing ? 'warfront-soldier' : 'warfront-observer'
       teamLabel.textContent = playing ? `${visual.playerTeam?.toUpperCase()} SQUAD · YOU ARE ON THE GROUND` : ''
       teamLabel.classList.toggle('is-red', visual.playerTeam === 'red')
-      weaponLabel.textContent = visual.currentWeapon === 'rifle' ? 'ASSAULT RIFLE · AUTO' : 'ROCKET LAUNCHER · HEAVY'
+      weaponLabel.textContent = visual.currentWeapon === 'rifle' ? 'ASSAULT RIFLE · AUTO' : visual.currentWeapon === 'scattergun' ? 'SCATTERGUN · CLOSE RANGE' : 'ROCKET LAUNCHER · HEAVY'
       updateKills()
       rifle.classList.toggle('is-primary', visual.currentWeapon === 'rifle')
       rocket.classList.toggle('is-primary', visual.currentWeapon === 'rocket')
+      scattergun.classList.toggle('is-primary', visual.currentWeapon === 'scattergun')
       soldierHelp.textContent = document.pointerLockElement === host.canvas
-        ? 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT · ESC UNLOCK'
-        : 'CLICK BATTLE TO LOCK AIM · WASD MOVE · LEFT CLICK FIRE · SPACE HOP · 1 / 2 WEAPONS · V ORBIT'
+        ? 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT · ESC UNLOCK'
+        : 'CLICK BATTLE TO LOCK AIM · WASD MOVE · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT'
       if (!playing) { held.clear(); mouseFiring = false; visual.setFiring(false); visual.setMovement(0, 0, 0); updateZoom() }
     }
     updateZoom()
@@ -213,6 +220,7 @@ const module: PlanetModule = {
       if (event.code === 'Space' && !event.repeat) visual.jump()
       if (event.code === 'Digit1') { visual.equip('rifle'); syncMode() }
       if (event.code === 'Digit2') { visual.equip('rocket'); syncMode() }
+      if (event.code === 'Digit3') { visual.equip('scattergun'); syncMode() }
       if (event.code === 'KeyV') { releaseAim(); visual.leaveSoldier(); syncMode(); return }
       keys.add(event.code)
       syncMovement()
