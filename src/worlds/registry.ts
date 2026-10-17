@@ -1,20 +1,10 @@
 import type { OrbitDefinition, PlanetDefinition } from '../app/PlanetContracts.ts'
 import { initialOrbitPosition } from '../space/OrbitSystem.ts'
 import { retryableLoad } from './retryableLoad.ts'
+import { PLANET_SLUGS, type PlanetSlug } from './planetSlugs.ts'
 
-export const PLANET_SLUGS = [
-  'voxel',
-  'stretch-squash',
-  'warfront',
-  'npc-ecs',
-  'drone-fleet',
-  'event-horizon',
-  'bitboard',
-  'pixel-farm',
-  'material-forge',
-] as const
-
-export type PlanetSlug = (typeof PLANET_SLUGS)[number]
+export { PLANET_SLUGS }
+export type { PlanetSlug }
 
 /** Nine rings form three project families. Phase sets the opening composition. */
 export const orbitDefinitions = {
@@ -43,12 +33,12 @@ export const planetDefinitions = [
   },
   {
     slug: 'stretch-squash',
-    title: 'Elastic Foundry',
+    title: 'The Elastic Jungle',
     projectKey: 'stretch-squash-rig',
     position: initialOrbitPosition(orbitDefinitions['stretch-squash']),
     orbit: orbitDefinitions['stretch-squash'],
     radius: 40,
-    color: 0xf472d0,
+    color: 0x91db72,
     load: retryableLoad(() => import('./stretch-squash.ts')),
   },
   {
