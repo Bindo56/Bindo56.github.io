@@ -1,15 +1,21 @@
 import * as THREE from 'three'
+import type { WarfrontAudio } from './WarfrontAudio.ts'
 
 const PLANET_RADIUS = 3.35
 const GROUND_SCALE = 5
 const GROUND_RADIUS = PLANET_RADIUS * GROUND_SCALE
+const SOLDIER_GROUND_CLEARANCE = 0.003
+const PLAYER_ANCHOR_CLEARANCE = 0.0005
 const UP = new THREE.Vector3(0, 1, 0)
 const FORWARD = new THREE.Vector3(0, 0, 1)
 const BLUE = 0x4ebaff
 const RED = 0xff6658
+const SOLDIER_HEALTH = 3
+const PLAYER_HEALTH = 6
 
 export type Team = 'blue' | 'red'
 export type Weapon = 'rifle' | 'scattergun' | 'rocket'
+type Formation = 'front' | Team
 
 interface Fighter {
   root: THREE.Group
@@ -19,15 +25,27 @@ interface Fighter {
   leftLeg: THREE.Group
   rightLeg: THREE.Group
   muzzle: THREE.Mesh
+  muzzleUntil: number
+  weaponKick: number
+  weapon: Weapon
+  assignedWeapon: Weapon
+  weaponModels: Partial<Record<Weapon, { root: THREE.Group; muzzle: THREE.Mesh }>>
   team: Team
   baseX: number
   baseZ: number
+  formation: Formation
+  rank: number
+  zoneIndex: number
   phase: number
   x: number
   z: number
   stunnedUntil: number
   health: number
+  deathAt: number
   respawnAt: number
+  reinforcement: number
+  deathPosition: THREE.Vector3
+  deathNormal: THREE.Vector3
 }
 
 interface Shot {
@@ -63,11 +81,24 @@ interface BuildingObstacle {
   height: number
 }
 
+interface GroundAsset {
+  object: THREE.Object3D
+  zone: THREE.Group
+  x: number
+  z: number
+  clearance: number
+  rotation: THREE.Quaternion
+}
+
 interface Tracer {
   mesh: THREE.Mesh
   from: Fighter
-  to: Fighter
-  phase: number
+  targets: Fighter[]
+  velocity: THREE.Vector3
+  nextFire: number
+  life: number
+  active: boolean
+  weapon: Weapon
 }
 
 interface Smoke {
@@ -75,6 +106,11 @@ interface Smoke {
   baseX: number
   baseZ: number
   phase: number
+}
+
+interface HealthBar {
+  group: THREE.Group
+  fill: THREE.Mesh
 }
 
 /** A globe-scale spectator diorama. Every battle stays on the planet surface. */
@@ -85,22 +121,31 @@ export class WarfrontVisual {
   private readonly geometries = new Set<THREE.BufferGeometry>()
   private readonly materials = new Set<THREE.Material>()
   private readonly boxCache = new Map<string, THREE.BoxGeometry>()
+  private readonly cylinderCache = new Map<string, THREE.CylinderGeometry>()
+  private readonly projectileCache = new Map<Weapon, THREE.BufferGeometry>()
   private readonly fighterMaterialCache = new Map<string, THREE.Material>()
   private readonly fighters: Fighter[] = []
+  private readonly frontlineFighters: Fighter[] = []
   private readonly kills: Record<Team, number> = { blue: 0, red: 0 }
   private readonly shots: Shot[] = []
   private readonly impacts: Impact[] = []
   private readonly battleZones: BattleZone[] = []
   private readonly buildingObstacles: BuildingObstacle[] = []
+  private readonly groundAssets: GroundAsset[] = []
   private readonly tracers: Tracer[] = []
+  private readonly pursuers = new Set<Fighter>()
   private readonly smoke: Smoke[] = []
   private readonly blasts: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
   private readonly shockwaves: { mesh: THREE.Mesh<THREE.TorusGeometry, THREE.MeshBasicMaterial>; phase: number }[] = []
   private readonly embers: { mesh: THREE.InstancedMesh; positions: THREE.Vector3[]; phases: number[]; zone: THREE.Group }[] = []
+  private readonly banners: { flag: THREE.Mesh; phase: number }[] = []
+  private readonly playerBar: HealthBar
+  private readonly enemyBar: HealthBar
   private readonly dummy = new THREE.Object3D()
   private readonly globe = new THREE.Group()
   private atmosphere: THREE.Mesh | null = null
   private readonly playerAnchor = new THREE.Group()
+  private audio: WarfrontAudio | null = null
   private readonly tempStart = new THREE.Vector3()
   private readonly tempEnd = new THREE.Vector3()
   private readonly tempDirection = new THREE.Vector3()
@@ -112,7 +157,10 @@ export class WarfrontVisual {
   private targetElevation = 0.16
   private targetDistance = 12.8
   private selected: Fighter | null = null
-  private weapon: Weapon = 'rifle'
+  private focusedEnemy: Fighter | null = null
+  private focusedEnemyUntil = 0
+  private playerInvulnerableUntil = 0
+  private weapon: Weapon = 'scattergun'
   private readonly playerForward = new THREE.Vector3(0, 0, 1)
   private recoil = 0
   private cameraShake = 0
@@ -123,6 +171,8 @@ export class WarfrontVisual {
   private firing = false
   private nextShot = 0
   private hopTime = 0
+  private footstepTimer = 0
+  private nextLowHealthCue = 0
   private entryProgress = 1
   private readonly entryCamera = new THREE.Vector3()
   private disposed = false
@@ -140,6 +190,8 @@ export class WarfrontVisual {
     const rim = new THREE.DirectionalLight(0x63a9ff, 1.25)
     rim.position.set(-7, -2, -5)
     this.scene.add(rim)
+    this.playerBar = this.createHealthBar(BLUE)
+    this.enemyBar = this.createHealthBar(RED)
 
     this.addStars()
     this.globe.name = 'Warfront planet'
@@ -148,12 +200,17 @@ export class WarfrontVisual {
     this.globe.add(this.playerAnchor)
 
     this.addSurfaceDetails(this.globe)
-    // Fibonacci spacing covers both hemispheres without a repeated latitude pattern.
-    for (let index = 0; index < 28; index++) {
-      const y = 1 - 2 * (index + 0.5) / 28
-      const radius = Math.sqrt(1 - y * y)
-      const angle = index * Math.PI * (3 - Math.sqrt(5))
-      this.addBattlefield(this.globe, new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius), index)
+    // The x=0 great circle is the front. Blue and Red hold opposite hemispheres.
+    for (let index = 0; index < 12; index++) {
+      const angle = index * Math.PI * 2 / 12
+      this.addBattlefield(this.globe, new THREE.Vector3(0, Math.cos(angle), Math.sin(angle)), index, 'front')
+    }
+    for (let index = 0; index < 8; index++) {
+      const angle = index * Math.PI * 2 / 8 + Math.PI / 8
+      const y = Math.cos(angle) * 0.76
+      const z = Math.sin(angle) * 0.76
+      this.addBattlefield(this.globe, new THREE.Vector3(-0.65, y, z), 12 + index, 'blue')
+      this.addBattlefield(this.globe, new THREE.Vector3(0.65, y, z), 20 + index, 'red')
     }
     this.update(0)
   }
@@ -189,37 +246,47 @@ export class WarfrontVisual {
   get playerTeam(): Team | null { return this.selected?.team ?? null }
   get enemyTeam(): Team | null { return this.selected?.team === 'blue' ? 'red' : this.selected?.team === 'red' ? 'blue' : null }
   get enemyKills(): number { return this.enemyTeam ? this.kills[this.enemyTeam] : 0 }
+  get playerHealth(): number { return this.selected?.health ?? 0 }
+  get playerMaxHealth(): number { return PLAYER_HEALTH }
   get currentWeapon(): Weapon { return this.weapon }
+
+  setAudio(audio: WarfrontAudio): void { this.audio = audio }
 
   enterRandomSoldier(): Team {
     if (this.selected) return this.selected.team
-    const available = this.fighters.filter(fighter => fighter.health > 0)
-    const pool = available.length > 0 ? available : this.fighters
+    const available = this.frontlineFighters.filter(fighter => fighter.health > 0)
+    const pool = available.length > 0 ? available : this.frontlineFighters
     const fighter = pool[Math.floor(Math.random() * pool.length)]
-    fighter.health = 3
+    fighter.health = PLAYER_HEALTH
     fighter.root.visible = true
     this.selected = fighter
+    this.audio?.activate()
+    this.audio?.playEnter()
+    this.focusedEnemy = null
+    this.playerInvulnerableUntil = this.elapsed + 0.65
     const heading = fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
     this.pitch = -0.02
-    this.weapon = 'rifle'
+    this.weapon = 'scattergun'
+    this.setFighterWeapon(fighter, this.weapon)
     this.nextShot = 0
     this.firing = false
     this.hopTime = 0
     this.entryProgress = 0
+    this.resetArmyFire()
     const start = fighter.zone.localToWorld(new THREE.Vector3(fighter.x, surfaceY(fighter.x, fighter.z), fighter.z))
     const normal = start.normalize()
-    this.playerAnchor.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
+    this.playerAnchor.position.copy(normal).multiplyScalar(PLANET_RADIUS + PLAYER_ANCHOR_CLEARANCE)
     this.playerForward.set(Math.sin(heading), 0, Math.cos(heading)).applyQuaternion(fighter.zone.getWorldQuaternion(new THREE.Quaternion()))
     this.orientPlayer()
     this.globe.scale.setScalar(GROUND_SCALE)
     for (const zone of this.battleZones) {
       zone.root.scale.setScalar(1 / GROUND_SCALE)
-      this.adjustZoneSurface(zone, GROUND_RADIUS, PLANET_RADIUS)
+      this.adjustZoneSurface(zone, GROUND_RADIUS)
     }
     if (this.atmosphere) this.atmosphere.visible = false
     this.playerAnchor.scale.setScalar(1 / GROUND_SCALE)
     this.playerAnchor.add(fighter.root)
-    fighter.root.position.set(0, 0.036, 0)
+    fighter.root.position.set(0, SOLDIER_GROUND_CLEARANCE, 0)
     fighter.root.rotation.y = 0
     this.refreshGroundObstacles()
     this.entryCamera.copy(normal).multiplyScalar(GROUND_RADIUS + 5).addScaledVector(this.playerForward, -2)
@@ -233,25 +300,38 @@ export class WarfrontVisual {
   leaveSoldier(): void {
     const fighter = this.selected
     if (!fighter) return
+    this.audio?.playExit()
     this.selected = null
+    this.focusedEnemy = null
+    fighter.health = Math.min(fighter.health, SOLDIER_HEALTH)
+    this.pursuers.clear()
     this.firing = false
+    this.resetArmyFire()
     this.clearShots()
     for (const impact of this.impacts) this.disposeImpact(impact)
     this.impacts.length = 0
     this.recoil = 0
     this.cameraShake = 0
     fighter.root.rotation.x = 0
+    fighter.weaponKick = 0
+    this.setFighterWeapon(fighter, fighter.assignedWeapon)
     this.moveForward = this.moveStrafe = this.turnSpeed = 0
     for (const zone of this.battleZones) zone.groundDetail.visible = false
     fighter.zone.add(fighter.root)
+    for (const casualty of this.fighters) {
+      if (casualty.root.parent !== this.scene) continue
+      casualty.zone.add(casualty.root)
+      casualty.root.position.set(casualty.x, surfaceY(casualty.x, casualty.z) + SOLDIER_GROUND_CLEARANCE, casualty.z)
+      casualty.root.visible = false
+    }
     this.globe.scale.setScalar(1)
     for (const zone of this.battleZones) {
       zone.root.scale.setScalar(1)
-      this.adjustZoneSurface(zone, PLANET_RADIUS, GROUND_RADIUS)
+      this.adjustZoneSurface(zone, PLANET_RADIUS)
     }
     if (this.atmosphere) this.atmosphere.visible = true
     this.playerAnchor.scale.setScalar(1)
-    fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z) + 0.036, fighter.z)
+    fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z) + SOLDIER_GROUND_CLEARANCE, fighter.z)
     this.refreshGroundObstacles()
     this.camera.fov = 48
     this.camera.near = 0.1
@@ -294,13 +374,32 @@ export class WarfrontVisual {
       building.center.copy(building.group.localToWorld(new THREE.Vector3(0, building.height * 0.48, 0)))
     }
   }
-  private adjustZoneSurface(zone: BattleZone, nextRadius: number, previousRadius: number): void {
-    const offset = (x: number, z: number): number => surfaceY(x, z, nextRadius) - surfaceY(x, z, previousRadius)
-    for (const object of zone.root.children) object.position.y += offset(object.position.x, object.position.z)
-    for (const building of zone.groundDetail.children) building.position.y += offset(building.position.x, building.position.z)
+  private groundAsset(zone: THREE.Group, object: THREE.Object3D, clearance: number): void {
+    const asset: GroundAsset = {
+      object, zone, x: object.position.x, z: object.position.z, clearance, rotation: object.quaternion.clone(),
+    }
+    this.groundAssets.push(asset)
+    this.placeGroundAsset(asset, PLANET_RADIUS)
   }
-  jump(): void { if (this.selected && this.hopTime <= 0) this.hopTime = 0.52 }
-  equip(weapon: Weapon): void { this.weapon = weapon }
+
+  private placeGroundAsset(asset: GroundAsset, radius: number): void {
+    asset.object.position.set(asset.x, surfaceY(asset.x, asset.z, radius) + asset.clearance, asset.z)
+    asset.object.quaternion.setFromUnitVectors(UP, surfaceNormal(asset.x, asset.z, radius)).multiply(asset.rotation)
+  }
+
+  private adjustZoneSurface(zone: BattleZone, radius: number): void {
+    for (const asset of this.groundAssets) if (asset.zone === zone.root) this.placeGroundAsset(asset, radius)
+  }
+  jump(): void {
+    if (!this.selected || this.hopTime > 0) return
+    this.hopTime = 0.52
+    this.audio?.playJump()
+  }
+  equip(weapon: Weapon): void {
+    if (weapon !== this.weapon && this.selected) this.audio?.playEquip()
+    this.weapon = weapon
+    if (this.selected) this.setFighterWeapon(this.selected, weapon)
+  }
   setFiring(value: boolean): void { this.firing = value && this.selected !== null }
 
   update(dt: number): void {
@@ -318,40 +417,75 @@ export class WarfrontVisual {
       this.camera.lookAt(0, 0, 0)
     }
 
+    this.updatePursuers()
     for (const fighter of this.fighters) {
       if (fighter === this.selected) continue
+      let respawned = false
       if (fighter.health <= 0) {
+        if (this.elapsed < fighter.deathAt + 0.5) {
+          const fall = THREE.MathUtils.clamp((this.elapsed - fighter.deathAt) / 0.5, 0, 1)
+          fighter.root.visible = true
+          fighter.root.rotation.z = (fighter.team === 'blue' ? -1 : 1) * fall * 1.25
+          if (fighter.root.parent === this.scene) fighter.root.position.copy(fighter.deathPosition)
+          else fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z, this.selected ? GROUND_RADIUS : PLANET_RADIUS) + SOLDIER_GROUND_CLEARANCE, fighter.z)
+          continue
+        }
+        fighter.root.visible = false
         if (this.elapsed < fighter.respawnAt) continue
-        fighter.health = 3
+        if (fighter.root.parent === this.scene) fighter.zone.add(fighter.root)
+        fighter.health = SOLDIER_HEALTH
+        fighter.reinforcement = 0
+        this.setFighterWeapon(fighter, fighter.assignedWeapon)
+        fighter.root.rotation.set(0, 0, 0)
         fighter.root.visible = true
+        respawned = true
       }
       const stride = this.elapsed * 2.9 + fighter.phase
-      fighter.x = fighter.baseX + Math.sin(this.elapsed * 0.73 + fighter.phase) * 0.075
-      fighter.z = fighter.baseZ + Math.cos(this.elapsed * 0.61 + fighter.phase) * 0.058
-      fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z, this.selected ? GROUND_RADIUS : PLANET_RADIUS) + 0.036 + Math.abs(Math.sin(stride)) * 0.009, fighter.z)
-      fighter.root.rotation.y = (fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2) + Math.sin(this.elapsed * 0.8 + fighter.phase) * 0.075
+      const side = fighter.team === 'blue' ? -1 : 1
+      const advance = Math.max(0, Math.sin(this.elapsed * 0.85 + fighter.zoneIndex * 0.52 + fighter.rank * 0.25))
+      fighter.reinforcement = Math.min(1, fighter.reinforcement + frame / 2.25)
+      const rearX = side * (fighter.formation === 'front' ? 1.06 : 0.85)
+      const formationX = THREE.MathUtils.lerp(rearX, fighter.baseX, fighter.reinforcement)
+        - side * advance * (fighter.formation === 'front' ? 0.1 : 0.025) * fighter.reinforcement
+        + Math.sin(this.elapsed * 1.1 + fighter.phase) * 0.012
+      const formationZ = fighter.baseZ + Math.cos(this.elapsed * 0.7 + fighter.phase) * 0.018
+      const chasing = this.pursuers.has(fighter) && fighter.reinforcement >= 1 && this.selected !== null
+      let heading: number
+      if (chasing) {
+        const playerLocal = fighter.zone.worldToLocal(this.playerAnchor.getWorldPosition(new THREE.Vector3()))
+        const dx = playerLocal.x - fighter.x
+        const dz = playerLocal.z - fighter.z
+        const distance = Math.hypot(dx, dz)
+        if (distance > 0.68) {
+          const step = Math.min(distance - 0.68, frame * (fighter.weapon === 'rocket' ? 1.05 : 1.35))
+          fighter.x += dx / distance * step
+          fighter.z += dz / distance * step
+        }
+        heading = Math.atan2(dx, dz)
+      } else {
+        const step = Math.min(1, frame * 2.2)
+        fighter.x = THREE.MathUtils.lerp(fighter.x, formationX, step)
+        fighter.z = THREE.MathUtils.lerp(fighter.z, formationZ, step)
+        heading = (fighter.team === 'blue' ? Math.PI / 2 : -Math.PI / 2) + Math.sin(this.elapsed * 0.8 + fighter.phase) * 0.075
+      }
+      const radius = this.selected ? GROUND_RADIUS : PLANET_RADIUS
+      fighter.root.position.set(fighter.x, surfaceY(fighter.x, fighter.z, radius) + SOLDIER_GROUND_CLEARANCE, fighter.z)
+      fighter.root.rotation.set(0, heading, this.elapsed < fighter.stunnedUntil ? 0.5 : 0)
+      fighter.root.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(UP, surfaceNormal(fighter.x, fighter.z, radius)))
+      if (respawned && this.selected) {
+        const sound = this.soundPlacement(fighter.root.getWorldPosition(new THREE.Vector3()))
+        this.audio?.playReinforcement(sound.distance, sound.pan)
+      }
       fighter.leftLeg.rotation.x = Math.sin(stride) * 0.29
       fighter.rightLeg.rotation.x = -Math.sin(stride) * 0.29
-      fighter.leftArm.rotation.x = -Math.sin(stride) * 0.09
-      fighter.rightArm.rotation.x = Math.sin(stride) * 0.09
-      fighter.muzzle.visible = Math.sin(this.elapsed * 6.8 + fighter.phase * 2.3) > 0.97
-      fighter.root.rotation.z = this.elapsed < fighter.stunnedUntil ? 0.5 : 0
+      fighter.weaponKick *= Math.exp(-14 * frame)
+      fighter.leftArm.rotation.x = -Math.sin(stride) * 0.09 - fighter.weaponKick * 0.22
+      fighter.rightArm.rotation.x = Math.sin(stride) * 0.09 - fighter.weaponKick * 0.6
+      fighter.weaponModels[fighter.weapon]?.root.position.set(0.04, 0.29, 0.13 - fighter.weaponKick * 0.065)
+      fighter.muzzle.visible = this.elapsed < fighter.muzzleUntil
     }
 
-    for (const tracer of this.tracers) {
-      if (tracer.from === this.selected || tracer.to === this.selected || tracer.from.health <= 0 || tracer.to.health <= 0) { tracer.mesh.visible = false; continue }
-      const cycle = (this.elapsed * 1.15 + tracer.phase) % 1.9
-      tracer.mesh.visible = cycle < 0.42
-      if (!tracer.mesh.visible) continue
-      const progress = cycle / 0.42
-      const radius = this.selected ? GROUND_RADIUS : PLANET_RADIUS
-      this.tempStart.set(tracer.from.x, surfaceY(tracer.from.x, tracer.from.z, radius) + 0.17, tracer.from.z)
-      this.tempEnd.set(tracer.to.x, surfaceY(tracer.to.x, tracer.to.z, radius) + 0.16, tracer.to.z)
-      tracer.mesh.position.copy(this.tempStart).lerp(this.tempEnd, progress)
-      tracer.mesh.position.y += Math.sin(progress * Math.PI) * 0.085
-      this.tempDirection.copy(this.tempEnd).sub(this.tempStart).normalize()
-      tracer.mesh.quaternion.setFromUnitVectors(FORWARD, this.tempDirection)
-    }
+    this.updateArmyFire(frame)
 
     for (const smoke of this.smoke) {
       const rise = (this.elapsed * 0.19 + smoke.phase) % 1
@@ -386,13 +520,118 @@ export class WarfrontVisual {
       }
       field.mesh.instanceMatrix.needsUpdate = true
     }
+    for (const banner of this.banners) banner.flag.rotation.y = Math.sin(this.elapsed * 2.1 + banner.phase) * 0.18
     this.updateShots(frame)
+    this.updateHealthBars()
+    if (this.selected && this.selected.health <= 2 && this.elapsed >= this.nextLowHealthCue) {
+      this.audio?.playLowHealth()
+      this.nextLowHealthCue = this.elapsed + 1.3
+    }
     const view = this.camera.position.clone().normalize()
     const playerNormal = this.selected ? this.playerAnchor.position.clone().normalize() : null
     for (const zone of this.battleZones) {
       zone.root.visible = zone.normal.dot(view) > (this.selected ? 0.55 : -0.05)
       zone.groundDetail.visible = playerNormal !== null && zone.normal.dot(playerNormal) > 0.8
     }
+  }
+
+  private updatePursuers(): void {
+    const player = this.selected
+    if (!player) { this.pursuers.clear(); return }
+    const position = this.playerAnchor.getWorldPosition(new THREE.Vector3())
+    for (const fighter of this.pursuers) {
+      if (fighter.team === player.team || fighter.health <= 0
+        || fighter.root.getWorldPosition(new THREE.Vector3()).distanceToSquared(position) > 13 * 13) this.pursuers.delete(fighter)
+    }
+    const nearby = this.frontlineFighters
+      .filter(fighter => fighter.team !== player.team && fighter.health > 0)
+      .map(fighter => ({ fighter, distance: fighter.root.getWorldPosition(new THREE.Vector3()).distanceToSquared(position) }))
+      .filter(entry => entry.distance < 9 * 9)
+      .sort((a, b) => a.distance - b.distance)
+    for (const entry of nearby) {
+      if (this.pursuers.size >= 8) break
+      this.pursuers.add(entry.fighter)
+    }
+  }
+
+  private soundPlacement(position: THREE.Vector3): { distance: number; pan: number } {
+    const toward = position.clone().sub(this.camera.position)
+    const distance = toward.length()
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion)
+    return { distance, pan: distance > 0.001 ? right.dot(toward.multiplyScalar(1 / distance)) : 0 }
+  }
+
+  private createHealthBar(color: number): HealthBar {
+    const group = new THREE.Group()
+    group.visible = false
+    const panel = new THREE.Mesh(
+      this.geometry(new THREE.PlaneGeometry(0.46, 0.075)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0x09111d, depthTest: false, depthWrite: false })),
+    )
+    const track = new THREE.Mesh(
+      this.geometry(new THREE.PlaneGeometry(0.42, 0.043)),
+      this.material(new THREE.MeshBasicMaterial({ color: 0x33404c, depthTest: false, depthWrite: false })),
+    )
+    track.position.z = 0.001
+    const fill = new THREE.Mesh(
+      this.geometry(new THREE.PlaneGeometry(0.4, 0.031)),
+      this.material(new THREE.MeshBasicMaterial({ color, depthTest: false, depthWrite: false })),
+    )
+    fill.position.z = 0.002
+    group.add(panel, track, fill)
+    group.renderOrder = 20
+    this.scene.add(group)
+    return { group, fill }
+  }
+
+  private placeHealthBar(bar: HealthBar, fighter: Fighter, maxHealth: number): void {
+    const position = fighter.root.getWorldPosition(new THREE.Vector3())
+    position.addScaledVector(position.clone().normalize(), 0.37)
+    bar.group.position.copy(position)
+    bar.group.quaternion.copy(this.camera.quaternion)
+    bar.group.scale.setScalar(THREE.MathUtils.clamp(position.distanceTo(this.camera.position) * 0.34, 0.42, 1.3))
+    const fraction = THREE.MathUtils.clamp(fighter.health / maxHealth, 0, 1)
+    bar.fill.scale.x = fraction
+    bar.fill.position.x = (fraction - 1) * 0.2
+    bar.group.visible = true
+  }
+
+  private updateHealthBars(): void {
+    const player = this.selected
+    this.playerBar.group.visible = player !== null
+    this.enemyBar.group.visible = false
+    if (!player) return
+    ;(this.playerBar.fill.material as THREE.MeshBasicMaterial).color.setHex(player.team === 'blue' ? BLUE : RED)
+    this.placeHealthBar(this.playerBar, player, PLAYER_HEALTH)
+    const enemy = this.focusedEnemy
+    if (!enemy || enemy.team === player.team || this.elapsed > this.focusedEnemyUntil
+      || (enemy.health <= 0 && this.elapsed > enemy.deathAt + 0.5)) return
+    ;(this.enemyBar.fill.material as THREE.MeshBasicMaterial).color.setHex(enemy.team === 'blue' ? BLUE : RED)
+    this.placeHealthBar(this.enemyBar, enemy, SOLDIER_HEALTH)
+  }
+
+  private focusEnemy(enemy: Fighter): void {
+    this.focusedEnemy = enemy
+    this.focusedEnemyUntil = this.elapsed + 2
+  }
+
+  private focusEnemyOnShot(start: THREE.Vector3, direction: THREE.Vector3, team: Team): void {
+    let aimed: Fighter | null = null
+    let best = Infinity
+    for (const enemy of this.fighters) {
+      if (enemy.team === team || enemy.health <= 0) continue
+      const position = enemy.root.getWorldPosition(new THREE.Vector3())
+      position.addScaledVector(position.clone().normalize(), 0.16)
+      const toward = position.sub(start)
+      const along = toward.dot(direction)
+      if (along <= 0 || along > 9) continue
+      const miss = toward.lengthSq() - along * along
+      if (miss > 0.38 * 0.38) continue
+      const score = miss + along * 0.003
+      if (score < best) { best = score; aimed = enemy }
+    }
+    if (aimed) this.focusEnemy(aimed)
+    else this.focusedEnemy = null
   }
 
   private updatePlayer(frame: number): void {
@@ -422,20 +661,33 @@ export class WarfrontVisual {
       }
       const transport = new THREE.Quaternion().setFromUnitVectors(oldNormal, nextNormal)
       this.playerForward.applyQuaternion(transport)
-      this.playerAnchor.position.copy(nextNormal).multiplyScalar(PLANET_RADIUS + 0.012)
+      this.playerAnchor.position.copy(nextNormal).multiplyScalar(PLANET_RADIUS + PLAYER_ANCHOR_CLEARANCE)
       this.orientPlayer()
     }
-    if (this.hopTime > 0) this.hopTime = Math.max(0, this.hopTime - frame)
+    const wasHopping = this.hopTime > 0
+    if (wasHopping) {
+      this.hopTime = Math.max(0, this.hopTime - frame)
+      if (this.hopTime === 0) this.audio?.playLand()
+    }
+    if (movement.lengthSq() > 0 && this.hopTime === 0) {
+      this.footstepTimer -= frame
+      if (this.footstepTimer <= 0) {
+        this.audio?.playFootstep()
+        this.footstepTimer = 0.36
+      }
+    } else this.footstepTimer = 0.1
     const hop = this.hopTime > 0 ? Math.sin((1 - this.hopTime / 0.52) * Math.PI) * 0.11 : 0
-    fighter.root.position.set(0, 0.036 + hop, 0)
+    fighter.root.position.set(0, SOLDIER_GROUND_CLEARANCE + hop, 0)
     fighter.root.rotation.y = 0
     const stride = this.elapsed * 12
     const walk = movement.lengthSq() > 0 ? 0.38 : 0.045
     fighter.leftLeg.rotation.x = Math.sin(stride) * walk
     fighter.rightLeg.rotation.x = -Math.sin(stride) * walk
-    fighter.leftArm.rotation.x = -Math.sin(stride) * walk * 0.4
-    fighter.rightArm.rotation.x = Math.sin(stride) * walk * 0.4
-    fighter.muzzle.visible = false
+    fighter.weaponKick *= Math.exp(-14 * frame)
+    fighter.leftArm.rotation.x = -Math.sin(stride) * walk * 0.4 - fighter.weaponKick * 0.22
+    fighter.rightArm.rotation.x = Math.sin(stride) * walk * 0.4 - fighter.weaponKick * 0.6
+    fighter.weaponModels[fighter.weapon]?.root.position.set(0.04, 0.29, 0.13 - fighter.weaponKick * 0.065)
+    fighter.muzzle.visible = this.elapsed < fighter.muzzleUntil
 
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
@@ -464,15 +716,19 @@ export class WarfrontVisual {
     const fighter = this.selected
     if (!fighter) return
     const weapon = this.weapon
+    this.audio?.playWeapon(weapon, 0, 0, true)
     this.nextShot = this.elapsed + (weapon === 'rocket' ? 1.1 : weapon === 'scattergun' ? 0.68 : 0.14)
     this.recoil = Math.min(1.4, this.recoil + (weapon === 'rocket' ? 1 : weapon === 'scattergun' ? 0.65 : 0.16))
     this.cameraShake = Math.max(this.cameraShake, weapon === 'rocket' ? 0.65 : weapon === 'scattergun' ? 0.3 : 0.1)
     if (typeof navigator.vibrate === 'function') navigator.vibrate(weapon === 'rocket' ? [35, 18, 55] : weapon === 'scattergun' ? [24, 12, 20] : 10)
+    fighter.muzzleUntil = this.elapsed + (weapon === 'rocket' ? 0.18 : weapon === 'scattergun' ? 0.13 : 0.07)
+    fighter.weaponKick = Math.max(fighter.weaponKick, weapon === 'rocket' ? 1 : weapon === 'scattergun' ? 0.7 : 0.28)
     fighter.muzzle.visible = true
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
     const right = normal.clone().cross(this.playerForward).normalize()
-    const start = normal.clone().multiplyScalar(GROUND_RADIUS + 0.18).addScaledVector(this.playerForward, 0.18)
+    const start = fighter.muzzle.getWorldPosition(new THREE.Vector3())
+    this.focusEnemyOnShot(start, this.playerForward.clone().addScaledVector(normal, this.pitch).normalize(), fighter.team)
     const pelletCount = weapon === 'scattergun' ? 7 : 1
     for (let index = 0; index < pelletCount; index++) {
       const spreadX = weapon === 'scattergun' ? (index - 3) * 0.045 + (Math.random() - 0.5) * 0.025 : 0
@@ -501,6 +757,104 @@ export class WarfrontVisual {
     trail.frustumCulled = false
     this.scene.add(trail)
     this.shots.push({ mesh, trail, trailPoints: [start.clone()], velocity: direction.clone().multiplyScalar(rocket ? 8 : weapon === 'scattergun' ? 14 : 18), life: rocket ? 1.7 : weapon === 'scattergun' ? 0.38 : 0.82, weapon, team })
+  }
+
+  private updateArmyFire(frame: number): void {
+    const ground = this.selected ? GROUND_RADIUS : PLANET_RADIUS
+    for (const tracer of this.tracers) {
+      if (!tracer.active) {
+        if (this.elapsed < tracer.nextFire || tracer.from.health <= 0 || tracer.from === this.selected) continue
+        const weapon = tracer.from.weapon
+        const start = tracer.from.muzzle.getWorldPosition(this.tempStart)
+        const candidates = tracer.targets.filter(fighter => fighter.health > 0
+          && fighter.root.getWorldPosition(this.tempEnd).distanceToSquared(start) < 2.1 * 2.1)
+        const player = this.selected
+        const playerDistance = player && player.team !== tracer.from.team && player.health > 0
+          ? player.root.getWorldPosition(this.tempEnd).distanceTo(start) : Infinity
+        const target = player && this.pursuers.has(tracer.from) && playerDistance < 4.5
+          ? player : candidates[Math.floor(hash(this.elapsed * 1.7 + tracer.from.phase) * candidates.length)]
+        if (!target) { tracer.nextFire = this.elapsed + 0.5; continue }
+        const end = target.root.getWorldPosition(this.tempEnd).clone()
+        if (target === player) {
+          const normal = this.playerAnchor.position.clone().normalize()
+          const right = normal.clone().cross(this.playerForward).normalize()
+          const lead = Math.min(1.2, playerDistance / (weapon === 'rocket' ? 2.1 : weapon === 'scattergun' ? 3.2 : 3.8)) * 0.65
+          end.addScaledVector(this.playerForward, this.moveForward * 0.95 * lead)
+            .addScaledVector(right, this.moveStrafe * 0.95 * lead)
+        }
+        const direction = end.clone().addScaledVector(end.clone().normalize(), 0.13)
+          .sub(start).normalize()
+        if (weapon === 'scattergun') direction.addScaledVector(direction.clone().cross(start.clone().normalize()).normalize(), (hash(this.elapsed * 13 + tracer.from.phase) - 0.5) * 0.13).normalize()
+        tracer.weapon = weapon
+        tracer.mesh.geometry = this.projectileGeometry(weapon)
+        tracer.mesh.material = this.armyBulletMaterial(weapon, tracer.from.team)
+        tracer.mesh.position.copy(start)
+        tracer.velocity.copy(direction).multiplyScalar(weapon === 'rocket' ? 2.1 : weapon === 'scattergun' ? 3.2 : 3.8)
+        tracer.mesh.quaternion.setFromUnitVectors(weapon === 'rocket' ? UP : FORWARD, direction)
+        tracer.mesh.visible = true
+        const sound = this.soundPlacement(start)
+        this.audio?.playWeapon(weapon, sound.distance, sound.pan)
+        tracer.from.muzzleUntil = this.elapsed + (weapon === 'rocket' ? 0.18 : weapon === 'scattergun' ? 0.13 : 0.07)
+        tracer.from.weaponKick = Math.max(tracer.from.weaponKick, weapon === 'rocket' ? 1 : weapon === 'scattergun' ? 0.7 : 0.28)
+        tracer.from.muzzle.visible = true
+        tracer.active = true
+        tracer.life = Math.max(weapon === 'rocket' ? 1.45 : weapon === 'scattergun' ? 0.65 : 0.85,
+          start.distanceTo(end) / tracer.velocity.length() + 0.25)
+        continue
+      }
+      tracer.life -= frame
+      const previous = tracer.mesh.position.clone()
+      const next = previous.clone().addScaledVector(tracer.velocity, frame)
+      const segment = next.clone().sub(previous)
+      const lengthSquared = Math.max(segment.lengthSq(), 0.000001)
+      let hit = false
+      for (const fighter of this.armyTargets(tracer)) {
+        if (fighter.health <= 0) continue
+        const position = fighter.root.getWorldPosition(this.tempEnd)
+        position.addScaledVector(position.clone().normalize(), 0.12)
+        const along = THREE.MathUtils.clamp(position.clone().sub(previous).dot(segment) / lengthSquared, 0, 1)
+        const contact = previous.clone().addScaledVector(segment, along)
+        const hitRadius = tracer.weapon === 'rocket' ? 0.2 : tracer.weapon === 'scattergun' ? 0.17 : 0.13
+        if (contact.distanceToSquared(position) > hitRadius * hitRadius) continue
+        tracer.mesh.position.copy(contact)
+        this.addImpact(contact, tracer.weapon, tracer.from.team)
+        this.damageFighter(fighter, tracer.weapon === 'rocket' ? 3 : tracer.weapon === 'scattergun' ? 2 : 1)
+        if (tracer.weapon === 'rocket') this.damageArmySplash(tracer, contact, fighter)
+        hit = true
+        break
+      }
+      if (!hit) tracer.mesh.position.copy(next)
+      if (!hit && tracer.life > 0 && next.lengthSq() > (ground + 0.01) ** 2) continue
+      if (!hit && (next.lengthSq() <= (ground + 0.01) ** 2 || tracer.weapon === 'rocket')) {
+        this.addImpact(next, tracer.weapon, tracer.from.team)
+        if (tracer.weapon === 'rocket') this.damageArmySplash(tracer, next)
+      }
+      tracer.active = false
+      tracer.mesh.visible = false
+      tracer.nextFire = this.elapsed + (tracer.weapon === 'rocket' ? 2.1 : tracer.weapon === 'scattergun' ? 1.35 : 0.85)
+        + hash(tracer.from.phase + this.elapsed * 0.5) * 0.65
+    }
+  }
+
+  private damageArmySplash(tracer: Tracer, position: THREE.Vector3, directHit?: Fighter): void {
+    for (const fighter of this.armyTargets(tracer)) {
+      if (fighter === directHit || fighter.health <= 0) continue
+      if (fighter.root.getWorldPosition(this.tempEnd).distanceToSquared(position) < 0.52 * 0.52) this.damageFighter(fighter, 3)
+    }
+  }
+
+  private armyTargets(tracer: Tracer): Fighter[] {
+    const player = this.selected
+    return player && player.team !== tracer.from.team && !tracer.targets.includes(player)
+      ? [...tracer.targets, player] : tracer.targets
+  }
+
+  private resetArmyFire(): void {
+    for (const tracer of this.tracers) {
+      tracer.active = false
+      tracer.mesh.visible = false
+      tracer.nextFire = this.elapsed + 0.25 + hash(tracer.from.phase) * 0.6
+    }
   }
 
   private updateShots(frame: number): void {
@@ -532,6 +886,7 @@ export class WarfrontVisual {
           this.tempStart.copy(previous).addScaledVector(segment, along)
           if (this.tempStart.distanceToSquared(position) > (shot.weapon === 'rocket' ? 0.2 : shot.weapon === 'scattergun' ? 0.13 : 0.12) ** 2) continue
           shot.mesh.position.copy(this.tempStart)
+          if (!this.focusedEnemy || this.elapsed > this.focusedEnemyUntil) this.focusEnemy(enemy)
           this.damageFighter(enemy, shot.weapon === 'rocket' ? 3 : 1)
           impact = true
           break
@@ -560,10 +915,13 @@ export class WarfrontVisual {
         if (shot.weapon === 'rocket') {
           for (const enemy of this.fighters) {
             if (enemy.team === shot.team || enemy === this.selected || enemy.health <= 0) continue
-            if (enemy.root.getWorldPosition(this.tempEnd).distanceToSquared(shot.mesh.position) < 0.68 * 0.68) this.damageFighter(enemy, 3)
+            if (enemy.root.getWorldPosition(this.tempEnd).distanceToSquared(shot.mesh.position) < 0.68 * 0.68) {
+              if (!this.focusedEnemy || this.elapsed > this.focusedEnemyUntil) this.focusEnemy(enemy)
+              this.damageFighter(enemy, 3)
+            }
           }
         }
-        this.addImpact(shot.mesh.position, shot.weapon)
+        this.addImpact(shot.mesh.position, shot.weapon, shot.team)
       }
       this.scene.remove(shot.mesh)
       this.scene.remove(shot.trail)
@@ -589,17 +947,71 @@ export class WarfrontVisual {
   }
 
   private damageFighter(fighter: Fighter, damage: number): void {
-    if (fighter.health <= 0 || fighter === this.selected) return
+    if (fighter.health <= 0) return
+    if (fighter === this.selected) {
+      if (this.elapsed < this.playerInvulnerableUntil) return
+      this.playerInvulnerableUntil = this.elapsed + 0.42
+    }
     fighter.health -= damage
-    if (fighter.health > 0) { fighter.stunnedUntil = this.elapsed + 0.3; return }
-    fighter.root.visible = false
-    fighter.respawnAt = this.elapsed + 4
+    const sound = this.soundPlacement(fighter.root.getWorldPosition(new THREE.Vector3()))
+    this.audio?.playDamage(fighter === this.selected, sound.distance, sound.pan)
+    fighter.stunnedUntil = this.elapsed + 0.3
+    if (fighter === this.selected) {
+      this.cameraShake = Math.max(this.cameraShake, 0.38)
+      if (typeof navigator.vibrate === 'function') navigator.vibrate(fighter.health > 0 ? 22 : [45, 25, 70])
+    }
+    if (fighter.health > 0) return
+    fighter.deathAt = this.elapsed
+    fighter.respawnAt = this.elapsed + 3.8
     this.kills[fighter.team]++
+    this.audio?.playDeath(fighter === this.selected, sound.distance, sound.pan)
+    this.addImpact(fighter.root.getWorldPosition(new THREE.Vector3()), 'scattergun')
+    if (fighter === this.selected) this.handoffPlayer(fighter)
   }
 
-  private addImpact(position: THREE.Vector3, weapon: Weapon): void {
+  private handoffPlayer(fallen: Fighter): void {
+    this.scene.attach(fallen.root)
+    fallen.deathPosition.copy(fallen.root.position)
+    fallen.deathNormal.copy(fallen.root.position).normalize()
+    const frontline = this.frontlineFighters.filter(fighter => fighter !== fallen && fighter.team === fallen.team && fighter.health > 0)
+    const reserves = this.fighters.filter(fighter => fighter !== fallen && fighter.team === fallen.team && fighter.health > 0)
+    let replacement = (frontline.length ? frontline : reserves)[Math.floor(Math.random() * (frontline.length || reserves.length))]
+    if (!replacement) {
+      fallen.zone.add(fallen.root)
+      fallen.health = SOLDIER_HEALTH
+      fallen.reinforcement = 0
+      fallen.x = (fallen.team === 'blue' ? -1 : 1) * 1.06
+      fallen.root.position.set(fallen.x, surfaceY(fallen.x, fallen.z, GROUND_RADIUS) + SOLDIER_GROUND_CLEARANCE, fallen.z)
+      fallen.root.rotation.set(0, 0, 0)
+      fallen.root.visible = true
+      replacement = fallen
+    }
+    const position = replacement.root.getWorldPosition(new THREE.Vector3())
+    this.selected = replacement
+    this.audio?.playEnter()
+    replacement.health = PLAYER_HEALTH
+    this.focusedEnemy = null
+    this.playerInvulnerableUntil = this.elapsed + 0.8
+    this.playerAnchor.position.copy(position.normalize()).multiplyScalar(PLANET_RADIUS + PLAYER_ANCHOR_CLEARANCE)
+    const heading = replacement.team === 'blue' ? Math.PI / 2 : -Math.PI / 2
+    this.playerForward.set(Math.sin(heading), 0, Math.cos(heading)).applyQuaternion(replacement.zone.getWorldQuaternion(new THREE.Quaternion()))
+    this.orientPlayer()
+    this.playerAnchor.add(replacement.root)
+    this.setFighterWeapon(replacement, this.weapon)
+    replacement.root.position.set(0, SOLDIER_GROUND_CLEARANCE, 0)
+    replacement.root.rotation.set(0, 0, 0)
+    this.entryCamera.copy(this.camera.position)
+    this.entryProgress = 0
+    this.nextShot = this.elapsed + 0.4
+    this.firing = false
+    this.recoil = 0
+  }
+
+  private addImpact(position: THREE.Vector3, weapon: Weapon, team?: Team): void {
+    const sound = this.soundPlacement(position)
+    this.audio?.playImpact(weapon, sound.distance, sound.pan)
     const rocket = weapon === 'rocket'
-    const color = rocket ? 0xff793e : weapon === 'scattergun' ? 0xffd581 : 0xb6eaff
+    const color = rocket ? 0xff793e : weapon === 'scattergun' ? 0xffd581 : team === 'blue' ? 0x9deaff : team === 'red' ? 0xffa492 : 0xb6eaff
     const group = new THREE.Group()
     group.position.copy(position)
     const flash = new THREE.Mesh(
@@ -640,6 +1052,7 @@ export class WarfrontVisual {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    this.audio = null
     this.clearShots()
     for (const impact of this.impacts) this.disposeImpact(impact)
     this.impacts.length = 0
@@ -649,15 +1062,21 @@ export class WarfrontVisual {
     this.geometries.clear()
     this.materials.clear()
     this.boxCache.clear()
+    this.cylinderCache.clear()
+    this.projectileCache.clear()
     this.fighterMaterialCache.clear()
     this.fighters.length = 0
+    this.frontlineFighters.length = 0
     this.tracers.length = 0
+    this.pursuers.clear()
     this.smoke.length = 0
     this.blasts.length = 0
     this.shockwaves.length = 0
     this.embers.length = 0
+    this.banners.length = 0
     this.battleZones.length = 0
     this.buildingObstacles.length = 0
+    this.groundAssets.length = 0
   }
 
   private addPlanet(globe: THREE.Group): void {
@@ -742,10 +1161,11 @@ export class WarfrontVisual {
       const z = Math.sin(angle) * radius
       const height = 0.68 + hash(zoneIndex * 31 + index * 7) * 0.43
       const building = new THREE.Group()
-      building.position.set(x, surfaceY(x, z) + 0.012, z)
+      building.position.set(x, 0, z)
       building.rotation.y = angle + 0.6
       detail.add(building)
-      const footNormal = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + 0.012, z)).normalize()
+      this.groundAsset(zone, building, 0.002)
+      const footNormal = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + 0.002, z)).normalize()
       const center = zone.localToWorld(new THREE.Vector3(x, surfaceY(x, z) + height * 0.48, z))
       this.buildingObstacles.push({ normal: footNormal, center, radius: 0.33, detail, group: building, height })
       box(building, 0.42, 0.045, 0.32, scorched, 0, 0.022, 0)
@@ -764,22 +1184,40 @@ export class WarfrontVisual {
     return detail
   }
 
-  private addBattlefield(globe: THREE.Group, normal: THREE.Vector3, zoneIndex: number): void {
+  private addBattlefield(globe: THREE.Group, normal: THREE.Vector3, zoneIndex: number, formation: Formation): void {
     const zone = new THREE.Group()
-    zone.name = `Battle sector ${zoneIndex + 1}`
-    zone.position.copy(normal).multiplyScalar(PLANET_RADIUS + 0.012)
-    zone.quaternion.setFromUnitVectors(UP, normal)
+    zone.name = `${formation === 'front' ? 'Clash line' : `${formation} army reserve`} ${zoneIndex + 1}`
+    zone.position.copy(normal).multiplyScalar(PLANET_RADIUS)
+    const across = new THREE.Vector3(1, 0, 0).addScaledVector(normal, -normal.x).normalize()
+    zone.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, normal, across.clone().cross(normal)))
     globe.add(zone)
     const groundDetail = this.addGroundBuildings(zone, zoneIndex)
     this.battleZones.push({ root: zone, normal, groundDetail })
 
-    for (const [side, color] of [[-1, BLUE], [1, RED]] as const) {
+    const sides = formation === 'front' ? [-1, 1] : [formation === 'blue' ? -1 : 1]
+    for (const side of sides) {
+      const color = side < 0 ? BLUE : RED
       const signal = new THREE.Mesh(
-        this.boxGeometry(0.018, 0.012, 0.48),
+        this.boxGeometry(0.045, 0.012, 1.05),
         this.material(new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.82 })),
       )
-      signal.position.set(side * 0.42, surfaceY(side * 0.42, 0) + 0.016, 0)
+      signal.position.set(side * 0.72, 0, 0)
       zone.add(signal)
+      this.groundAsset(zone, signal, 0.008)
+      const banner = new THREE.Group()
+      const bannerX = side * 0.86
+      banner.position.set(bannerX, 0, -0.42)
+      banner.add(new THREE.Mesh(this.boxGeometry(0.018, 0.68, 0.018), this.fighterMaterial('banner-pole', () => new THREE.MeshStandardMaterial({ color: 0xb2a38c, roughness: 0.68 }))))
+      banner.children[0].position.y = 0.34
+      const flag = new THREE.Mesh(
+        this.boxGeometry(0.33, 0.21, 0.012),
+        this.fighterMaterial(`banner-${side}`, () => new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide })),
+      )
+      flag.position.set(side * 0.17, 0.55, 0)
+      banner.add(flag)
+      zone.add(banner)
+      this.groundAsset(zone, banner, 0.003)
+      this.banners.push({ flag, phase: zoneIndex * 0.63 + side })
     }
 
     const ruin = this.material(new THREE.MeshStandardMaterial({ color: 0x56616b, roughness: 0.78, metalness: 0.28, flatShading: true }))
@@ -791,28 +1229,31 @@ export class WarfrontVisual {
       const x = Math.cos(angle) * distance
       const z = Math.sin(angle) * distance
       const wall = new THREE.Mesh(this.boxGeometry(0.11 + (index % 3) * 0.035, height, 0.08), ruin)
-      wall.position.set(x, surfaceY(x, z) + height / 2 + 0.012, z)
+      wall.position.set(x, 0, z)
       wall.rotation.set((index % 2 ? 1 : -1) * 0.1, angle + 0.4, (index % 3 - 1) * 0.13)
       zone.add(wall)
+      this.groundAsset(zone, wall, height / 2 + 0.004)
       if (index % 2 === 0) {
         const crackX = Math.cos(angle) * (distance - 0.08)
         const crackZ = Math.sin(angle) * (distance - 0.08)
         const crack = new THREE.Mesh(this.boxGeometry(0.16, 0.006, 0.012), scar)
-        crack.position.set(crackX, surfaceY(crackX, crackZ) + 0.012, crackZ)
+        crack.position.set(crackX, 0, crackZ)
         crack.rotation.y = angle
         zone.add(crack)
+        this.groundAsset(zone, crack, 0.004)
       }
     }
 
-    for (const side of [-1, 1]) {
+    for (const side of sides) {
       const x = side * 0.54
       const z = side * 0.3
       const flame = new THREE.Mesh(
         this.geometry(new THREE.ConeGeometry(0.052, 0.16, 5)),
         this.material(new THREE.MeshBasicMaterial({ color: 0xff9e45, transparent: true, opacity: 0.82, depthWrite: false })),
       )
-      flame.position.set(x, surfaceY(x, z) + 0.09, z)
+      flame.position.set(x, 0, z)
       zone.add(flame)
+      this.groundAsset(zone, flame, 0.081)
       for (let index = 0; index < 2; index++) {
         const mesh = new THREE.Mesh(
           this.geometry(new THREE.SphereGeometry(0.075, 6, 4)),
@@ -825,28 +1266,28 @@ export class WarfrontVisual {
 
     const blue: Fighter[] = []
     const red: Fighter[] = []
-    for (let index = 0; index < 4; index++) {
-      blue.push(this.addFighter(zone, 'blue', index, zoneIndex))
-      red.push(this.addFighter(zone, 'red', index, zoneIndex))
+    const count = formation === 'front' ? 6 : 8
+    for (let index = 0; index < count; index++) {
+      if (formation !== 'red') blue.push(this.addFighter(zone, 'blue', index, zoneIndex, formation))
+      if (formation !== 'blue') red.push(this.addFighter(zone, 'red', index, zoneIndex, formation))
     }
-    const blueBolt = this.material(new THREE.MeshBasicMaterial({ color: 0x7ae7ff, blending: THREE.AdditiveBlending, depthWrite: false }))
-    const redBolt = this.material(new THREE.MeshBasicMaterial({ color: 0xffaa65, blending: THREE.AdditiveBlending, depthWrite: false }))
-    const boltGeometry = this.geometry(new THREE.BoxGeometry(0.018, 0.018, 0.19))
-    for (let index = 0; index < 7; index++) {
-      const from = index % 2 ? red[index % red.length] : blue[index % blue.length]
-      const to = index % 2 ? blue[(index + 2) % blue.length] : red[(index + 3) % red.length]
-      const mesh = new THREE.Mesh(boltGeometry, from.team === 'blue' ? blueBolt : redBolt)
-      mesh.visible = false
-      zone.add(mesh)
-      this.tracers.push({ mesh, from, to, phase: index * 0.31 + zoneIndex * 0.17 })
+    if (formation === 'front') {
+      for (let index = 0; index < blue.length + red.length; index++) {
+        const from = index < blue.length ? blue[index] : red[index - blue.length]
+        const mesh = new THREE.Mesh(this.projectileGeometry(from.weapon), this.armyBulletMaterial(from.weapon, from.team))
+        mesh.visible = false
+        this.scene.add(mesh)
+        this.tracers.push({ mesh, from, targets: from.team === 'blue' ? red : blue, velocity: new THREE.Vector3(), nextFire: 0.35 + index * 0.15 + zoneIndex * 0.08, life: 0, active: false, weapon: from.weapon })
+      }
     }
     const blast = new THREE.Mesh(
       this.geometry(new THREE.SphereGeometry(0.13, 10, 8)),
       this.material(new THREE.MeshBasicMaterial({ color: 0xff9c51, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })),
     )
     const blastZ = (zoneIndex % 2 ? 1 : -1) * 0.17
-    blast.position.set(0.04, surfaceY(0.04, blastZ) + 0.1, blastZ)
+    blast.position.set(0.04, 0, blastZ)
     zone.add(blast)
+    this.groundAsset(zone, blast, 0.1)
     const phase = hash(zoneIndex * 37) * 0.95
     this.blasts.push({ mesh: blast, phase })
     const wave = new THREE.Mesh(
@@ -854,8 +1295,9 @@ export class WarfrontVisual {
       this.material(new THREE.MeshBasicMaterial({ color: 0xffac65, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })),
     )
     wave.rotation.x = -Math.PI / 2
-    wave.position.set(0.04, surfaceY(0.04, blastZ) + 0.018, blastZ)
+    wave.position.set(0.04, 0, blastZ)
     zone.add(wave)
+    this.groundAsset(zone, wave, 0.008)
     this.shockwaves.push({ mesh: wave, phase })
     const emberGeometry = this.geometry(new THREE.TetrahedronGeometry(0.008))
     const emberMaterial = this.material(new THREE.MeshBasicMaterial({ color: 0xffaa58, blending: THREE.AdditiveBlending, depthWrite: false }))
@@ -873,7 +1315,84 @@ export class WarfrontVisual {
     this.embers.push({ mesh: emberMesh, positions, phases, zone })
   }
 
-  private addFighter(zone: THREE.Group, team: Team, index: number, zoneIndex: number): Fighter {
+  private setFighterWeapon(fighter: Fighter, weapon: Weapon): void {
+    let model = fighter.weaponModels[weapon]
+    if (!model) {
+      model = this.buildWeaponModel(weapon, fighter.team)
+      fighter.weaponModels[weapon] = model
+      fighter.root.add(model.root)
+    }
+    for (const entry of Object.values(fighter.weaponModels)) if (entry) {
+      entry.root.visible = entry === model
+      entry.muzzle.visible = false
+    }
+    fighter.weapon = weapon
+    fighter.muzzle = model.muzzle
+    fighter.muzzleUntil = 0
+    fighter.weaponKick = 0
+  }
+
+  private buildWeaponModel(weapon: Weapon, team: Team): { root: THREE.Group; muzzle: THREE.Mesh } {
+    const root = new THREE.Group()
+    root.name = `${weapon} model`
+    root.position.set(0.04, 0.29, 0.13)
+    const metal = this.fighterMaterial('weapon-metal', () => new THREE.MeshStandardMaterial({ color: 0x2a3540, metalness: 0.72, roughness: 0.43, flatShading: true }))
+    const steel = this.fighterMaterial('weapon-steel', () => new THREE.MeshStandardMaterial({ color: 0x74818a, metalness: 0.72, roughness: 0.36, flatShading: true }))
+    const grip = this.fighterMaterial('weapon-grip', () => new THREE.MeshStandardMaterial({ color: 0x151d26, metalness: 0.18, roughness: 0.82 }))
+    const accent = this.fighterMaterial(`weapon-accent-${team}`, () => new THREE.MeshBasicMaterial({ color: team === 'blue' ? 0x5dcfff : 0xff7865 }))
+    const amber = this.fighterMaterial('weapon-amber', () => new THREE.MeshBasicMaterial({ color: 0xffbc67 }))
+    const part = (width: number, height: number, depth: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh => {
+      const mesh = new THREE.Mesh(this.boxGeometry(width, height, depth), material)
+      mesh.position.set(x, y, z)
+      root.add(mesh)
+      return mesh
+    }
+    const tube = (radius: number, length: number, material: THREE.Material, x: number, y: number, z: number): THREE.Mesh => {
+      const mesh = new THREE.Mesh(this.cylinderGeometry(radius, length), material)
+      mesh.position.set(x, y, z)
+      mesh.rotation.x = Math.PI / 2
+      root.add(mesh)
+      return mesh
+    }
+    let muzzleZ = 0.48
+    if (weapon === 'rifle') {
+      part(0.12, 0.1, 0.26, metal, 0, 0, 0.02)
+      part(0.095, 0.08, 0.19, grip, 0, -0.015, -0.2)
+      part(0.075, 0.14, 0.09, steel, 0, -0.115, 0.035)
+      part(0.16, 0.035, 0.15, steel, 0, 0.06, 0.11)
+      part(0.085, 0.05, 0.095, grip, 0, 0.09, -0.035)
+      tube(0.026, 0.32, steel, 0, 0.01, 0.31)
+      tube(0.038, 0.06, metal, 0, 0.01, 0.47)
+      part(0.105, 0.018, 0.055, accent, 0, 0.055, 0.015)
+      muzzleZ = 0.52
+    } else if (weapon === 'scattergun') {
+      part(0.18, 0.115, 0.23, metal, 0, 0, 0.015)
+      part(0.12, 0.09, 0.22, grip, 0, -0.02, -0.18)
+      part(0.19, 0.07, 0.11, grip, 0, -0.02, 0.18)
+      tube(0.038, 0.31, steel, -0.052, 0.03, 0.29)
+      tube(0.038, 0.31, steel, 0.052, 0.03, 0.29)
+      part(0.18, 0.028, 0.1, amber, 0, 0.095, 0.07)
+      muzzleZ = 0.48
+    } else {
+      tube(0.11, 0.7, metal, 0, 0.035, 0.1)
+      tube(0.12, 0.065, steel, 0, 0.035, 0.43)
+      tube(0.095, 0.08, grip, 0, 0.035, -0.25)
+      part(0.16, 0.045, 0.23, grip, 0, -0.11, 0.06)
+      part(0.04, 0.09, 0.06, steel, 0, 0.17, 0.24)
+      part(0.045, 0.05, 0.23, accent, 0, 0.15, -0.02)
+      muzzleZ = 0.49
+    }
+    const muzzle = new THREE.Mesh(
+      this.boxGeometry(weapon === 'rocket' ? 0.2 : weapon === 'scattergun' ? 0.17 : 0.11, weapon === 'rocket' ? 0.2 : 0.12, 0.06),
+      this.fighterMaterial(`muzzle-flash-${weapon}`, () => new THREE.MeshBasicMaterial({ color: weapon === 'rocket' ? 0xff8c43 : weapon === 'scattergun' ? 0xffd789 : 0xfff2ae, blending: THREE.AdditiveBlending, depthWrite: false })),
+    )
+    muzzle.position.set(0, weapon === 'rocket' ? 0.035 : weapon === 'scattergun' ? 0.03 : 0.01, muzzleZ)
+    muzzle.visible = false
+    root.add(muzzle)
+    return { root, muzzle }
+  }
+
+  private addFighter(zone: THREE.Group, team: Team, index: number, zoneIndex: number, formation: Formation): Fighter {
     const color = team === 'blue' ? BLUE : RED
     const armor = this.fighterMaterial(`armor-${team}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.68, metalness: 0.26, flatShading: true }))
     const face = this.fighterMaterial('face', () => new THREE.MeshStandardMaterial({ color: 0xe8c8a0, roughness: 0.96, flatShading: true }))
@@ -908,16 +1427,23 @@ export class WarfrontVisual {
     box(0.065, 0.18, 0.075, armor, 0, -0.09, 0, rightArm)
     box(0.072, 0.17, 0.078, dark, 0, -0.08, 0, leftLeg)
     box(0.072, 0.17, 0.078, dark, 0, -0.08, 0, rightLeg)
-    box(0.058, 0.048, 0.31, dark, 0.04, 0.28, 0.18)
-    box(0.09, 0.066, 0.12, dark, 0.04, 0.28, 0.04)
-    const muzzle = box(0.105, 0.105, 0.04, glint, 0.04, 0.28, 0.355)
-    muzzle.visible = false
+    const assignedWeapon: Weapon = (index + zoneIndex + (team === 'red' ? 1 : 0)) % 3 === 0
+      ? 'rifle' : (index + zoneIndex + (team === 'red' ? 1 : 0)) % 3 === 1 ? 'scattergun' : 'rocket'
+    const model = this.buildWeaponModel(assignedWeapon, team)
+    root.add(model.root)
 
     const phase = index * 0.88 + zoneIndex * 1.3 + (team === 'red' ? 2.2 : 0)
-    const baseX = (team === 'blue' ? -0.24 : 0.24) + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.14
-    const baseZ = -0.28 + index * 0.18 + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.08
-    const fighter: Fighter = { root, zone, leftArm, rightArm, leftLeg, rightLeg, muzzle, team, baseX, baseZ, phase, x: baseX, z: baseZ, stunnedUntil: 0, health: 3, respawnAt: 0 }
+    const side = team === 'blue' ? -1 : 1
+    const columns = formation === 'front' ? 3 : 4
+    const rank = Math.floor(index / columns)
+    const column = index % columns
+    const baseX = side * ((formation === 'front' ? 0.29 : 0.12) + rank * 0.25)
+      + (hash(index * 11 + zoneIndex * 9) - 0.5) * 0.025
+    const baseZ = (column - (columns - 1) / 2) * 0.29
+      + (rank % 2 ? 0.055 : 0) + (hash(index * 23 + zoneIndex * 3) - 0.5) * 0.025
+    const fighter: Fighter = { root, zone, leftArm, rightArm, leftLeg, rightLeg, muzzle: model.muzzle, muzzleUntil: 0, weaponKick: 0, weapon: assignedWeapon, assignedWeapon, weaponModels: { [assignedWeapon]: model }, team, baseX, baseZ, formation, rank, zoneIndex, phase, x: baseX, z: baseZ, stunnedUntil: 0, health: 3, deathAt: 0, respawnAt: 0, reinforcement: 1, deathPosition: new THREE.Vector3(), deathNormal: new THREE.Vector3() }
     this.fighters.push(fighter)
+    if (formation === 'front') this.frontlineFighters.push(fighter)
     return fighter
   }
 
@@ -949,6 +1475,35 @@ export class WarfrontVisual {
     return geometry
   }
 
+  private cylinderGeometry(radius: number, length: number): THREE.CylinderGeometry {
+    const key = `${radius}/${length}`
+    let geometry = this.cylinderCache.get(key)
+    if (!geometry) {
+      geometry = this.geometry(new THREE.CylinderGeometry(radius, radius, length, 8))
+      this.cylinderCache.set(key, geometry)
+    }
+    return geometry
+  }
+
+  private projectileGeometry(weapon: Weapon): THREE.BufferGeometry {
+    let geometry = this.projectileCache.get(weapon)
+    if (!geometry) {
+      geometry = this.geometry(weapon === 'rocket' ? new THREE.ConeGeometry(0.052, 0.18, 6)
+        : weapon === 'scattergun' ? new THREE.SphereGeometry(0.032, 6, 4)
+          : new THREE.BoxGeometry(0.018, 0.018, 0.17))
+      this.projectileCache.set(weapon, geometry)
+    }
+    return geometry
+  }
+
+  private armyBulletMaterial(weapon: Weapon, team: Team): THREE.Material {
+    return this.fighterMaterial(`army-bullet-${weapon}-${team}`, () => new THREE.MeshBasicMaterial({
+      color: weapon === 'rocket' ? 0xff9a4e : weapon === 'scattergun' ? 0xffdb91 : team === 'blue' ? 0x9deaff : 0xffa18d,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }))
+  }
+
   private fighterMaterial(key: string, create: () => THREE.Material): THREE.Material {
     let material = this.fighterMaterialCache.get(key)
     if (!material) {
@@ -966,6 +1521,10 @@ export class WarfrontVisual {
 
 function surfaceY(x: number, z: number, radius = PLANET_RADIUS): number {
   return Math.sqrt(Math.max(0, radius * radius - x * x - z * z)) - radius
+}
+
+function surfaceNormal(x: number, z: number, radius: number): THREE.Vector3 {
+  return new THREE.Vector3(x, Math.sqrt(Math.max(0, radius * radius - x * x - z * z)), z).normalize()
 }
 
 function hash(value: number): number {

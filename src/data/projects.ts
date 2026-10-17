@@ -8,6 +8,8 @@ export interface Project {
   summary: string
   tech: readonly string[]
   video?: string
+  /** Separate browser demonstration associated with a portfolio world. */
+  demo?: string
   /** Original source or project page. Omit when the original is not publicly available. */
   github?: string
   color: number
@@ -38,6 +40,7 @@ export const projects: readonly Project[] = [
     summary: 'Unity ECS NPC simulation with world time, schedules, energy, locations, intent, and awareness represented as components and systems.',
     tech: ['Unity', 'C#', 'ECS', 'NPC AI'],
     github: 'https://github.com/Bindo56/ECS',
+    demo: '/worlds/clockwork-city/',
     color: 0x6be0d5,
   },
   {

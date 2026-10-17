@@ -1,6 +1,7 @@
 import type { PlanetDefinition, PlanetHost, PlanetModule, PlanetSession, PreparedPlanet } from '../app/PlanetContracts.ts'
 import { projects } from '../data/projects.ts'
 import { WarfrontVisual } from './warfront/WarfrontVisual.ts'
+import { WarfrontAudio } from './warfront/WarfrontAudio.ts'
 
 interface PreparedWarfront extends PreparedPlanet {
   visual: WarfrontVisual
@@ -48,6 +49,8 @@ const module: PlanetModule = {
   mount(prepared: PreparedPlanet, host: PlanetHost): PlanetSession {
     const world = prepared as PreparedWarfront
     const { visual } = world
+    const audio = new WarfrontAudio()
+    visual.setAudio(audio)
     const project = projects.find(item => item.key === 'survival-multiplayer')
     const root = el('div', 'warfront-ui')
     root.dataset.testid = 'warfront-observer'
@@ -57,7 +60,7 @@ const module: PlanetModule = {
     intro.append(
       el('span', 'warfront-kicker', 'SYSTEM ZERO / WARFRONT'),
       el('h1', '', 'A planet at war.'),
-      el('p', '', 'Orbit the scorched world. Blue and Red squads fight across its surface among craters, ruins, fire, and smoke. Zoom in anywhere the battle glows.'),
+      el('p', '', 'Orbit a world split by war. Blue and Red armies hold opposite sides, carrying rifles, scatterguns, and rocket launchers across one continuous front. Fallen soldiers are replaced from the rear.'),
     )
     const legend = el('div', 'warfront-legend')
     legend.append(el('span', 'is-blue', 'BLUE SQUADS'), el('span', 'is-red', 'RED SQUADS'), el('span', 'warfront-observer-tag', 'OBSERVER MODE'))
@@ -84,30 +87,32 @@ const module: PlanetModule = {
     for (const button of [planet, battle, zoomOut, zoomIn]) button.type = 'button'
     zoomOut.setAttribute('aria-label', 'Zoom out from the planet')
     zoomIn.setAttribute('aria-label', 'Zoom in toward the planet')
-    planet.addEventListener('click', () => { if (host.isInteractive()) { visual.showPlanet(); updateZoom() } })
-    battle.addEventListener('click', () => { if (host.isInteractive()) { visual.focusBattle(); updateZoom() } })
-    zoomOut.addEventListener('click', () => { if (host.isInteractive()) { visual.zoom(100); updateZoom() } })
-    zoomIn.addEventListener('click', () => { if (host.isInteractive()) { visual.zoom(-100); updateZoom() } })
+    planet.addEventListener('click', () => { if (host.isInteractive()) { audio.activate(); audio.playUi(); visual.showPlanet(); updateZoom() } })
+    battle.addEventListener('click', () => { if (host.isInteractive()) { audio.activate(); audio.playUi(); visual.focusBattle(); updateZoom() } })
+    zoomOut.addEventListener('click', () => { if (host.isInteractive()) { audio.activate(); audio.playUi(); visual.zoom(100); updateZoom() } })
+    zoomIn.addEventListener('click', () => { if (host.isInteractive()) { audio.activate(); audio.playUi(); visual.zoom(-100); updateZoom() } })
     controls.append(planet, battle, zoomOut, zoomValue, zoomIn)
 
     const soldierHud = el('section', 'warfront-soldier-hud')
     const teamLabel = el('span', 'warfront-soldier-team')
     const weaponLabel = el('span', 'warfront-soldier-weapon')
+    const healthLabel = el('span', 'warfront-player-health')
     const killLabel = el('strong', 'warfront-kill-count')
     killLabel.setAttribute('aria-live', 'polite')
-    const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT')
+    const soldierHelp = el('p', '', 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · FALLEN SOLDIERS REDEPLOY · V ORBIT')
     const weaponControls = el('div', 'warfront-soldier-actions')
     const rifle = el('button', 'warfront-button', '1  Assault rifle')
     const rocket = el('button', 'warfront-button', '2  Rocket launcher')
     const scattergun = el('button', 'warfront-button', '3  Scattergun')
     const leave = el('button', 'warfront-button', '↑ Observe planet')
+    const soldierSound = el('button', 'warfront-button')
     for (const button of [rifle, rocket, scattergun, leave]) button.type = 'button'
     rifle.addEventListener('click', () => { visual.equip('rifle'); syncMode() })
     rocket.addEventListener('click', () => { visual.equip('rocket'); syncMode() })
     scattergun.addEventListener('click', () => { visual.equip('scattergun'); syncMode() })
     leave.addEventListener('click', () => { releaseAim(); visual.leaveSoldier(); syncMode() })
-    weaponControls.append(rifle, rocket, scattergun, leave)
-    soldierHud.append(teamLabel, weaponLabel, killLabel, soldierHelp, weaponControls)
+    weaponControls.append(rifle, rocket, scattergun, soldierSound, leave)
+    soldierHud.append(teamLabel, weaponLabel, healthLabel, killLabel, soldierHelp, weaponControls)
 
     const touchControls = el('div', 'warfront-touch-controls')
     const touchPad = el('div', 'warfront-touch-pad')
@@ -118,6 +123,7 @@ const module: PlanetModule = {
       button.type = 'button'
       button.addEventListener('pointerdown', event => {
         if (!visual.isPlaying || !host.isInteractive()) return
+        audio.activate()
         event.preventDefault()
         button.setPointerCapture(event.pointerId)
         held.add(action)
@@ -152,6 +158,21 @@ const module: PlanetModule = {
     const footer = el('aside', 'warfront-footer')
     footer.append(el('span', '', 'DRAG TO ORBIT  ·  SCROLL / PINCH TO ZOOM  ·  WATCH THE BATTLE'))
     const links = el('div', 'warfront-links')
+    const observerSound = el('button', 'warfront-button')
+    const soundButtons = [observerSound, soldierSound]
+    const syncSound = (): void => {
+      for (const button of soundButtons) {
+        button.textContent = audio.enabled ? '♪ SOUND ON' : '♪ SOUND OFF'
+        button.setAttribute('aria-label', audio.enabled ? 'Mute Warfront sound' : 'Enable Warfront sound')
+        button.setAttribute('aria-pressed', String(audio.enabled))
+      }
+    }
+    for (const button of soundButtons) {
+      button.type = 'button'
+      button.addEventListener('click', () => { audio.toggle(); audio.playUi(); syncSound() })
+    }
+    syncSound()
+    links.append(observerSound)
     if (project?.github) links.append(external('Original Unreal source ↗', project.github))
     if (project?.video) links.append(external('Original project video ↗', project.video))
     const exit = el('button', 'warfront-exit', '← Return to space')
@@ -178,8 +199,8 @@ const module: PlanetModule = {
       rocket.classList.toggle('is-primary', visual.currentWeapon === 'rocket')
       scattergun.classList.toggle('is-primary', visual.currentWeapon === 'scattergun')
       soldierHelp.textContent = document.pointerLockElement === host.canvas
-        ? 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT · ESC UNLOCK'
-        : 'CLICK BATTLE TO LOCK AIM · WASD MOVE · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · V ORBIT'
+        ? 'WASD MOVE · MOUSE AIM · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · FALLEN SOLDIERS REDEPLOY · V ORBIT · ESC UNLOCK'
+        : 'CLICK BATTLE TO LOCK AIM · WASD MOVE · LEFT CLICK FIRE · SPACE HOP · 1 / 2 / 3 WEAPONS · FALLEN SOLDIERS REDEPLOY · V ORBIT'
       if (!playing) { held.clear(); mouseFiring = false; visual.setFiring(false); visual.setMovement(0, 0, 0); updateZoom() }
     }
     updateZoom()
@@ -188,6 +209,8 @@ const module: PlanetModule = {
       if (!visual.isPlaying) return
       const label = `${visual.enemyTeam?.toUpperCase()} ELIMINATED  ${visual.enemyKills}`
       if (killLabel.textContent !== label) killLabel.textContent = label
+      const health = `ARMOR ${visual.playerHealth} / ${visual.playerMaxHealth} · REINFORCEMENTS INBOUND`
+      if (healthLabel.textContent !== health) healthLabel.textContent = health
     }
 
     function lockAim(): void {
@@ -216,6 +239,7 @@ const module: PlanetModule = {
     const keyDown = (event: KeyboardEvent): void => {
       if (!visual.isPlaying || !host.isInteractive() || event.altKey || event.ctrlKey || event.metaKey) return
       if (event.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return
+      audio.activate()
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) event.preventDefault()
       if (event.code === 'Space' && !event.repeat) visual.jump()
       if (event.code === 'Digit1') { visual.equip('rifle'); syncMode() }
@@ -235,6 +259,7 @@ const module: PlanetModule = {
     const distance = (a: { x: number; y: number }, b: { x: number; y: number }): number => Math.hypot(a.x - b.x, a.y - b.y)
     const pointerDown = (event: PointerEvent): void => {
       if (!host.isInteractive()) return
+      audio.activate()
       if (visual.isPlaying && event.pointerType === 'mouse') {
         if (document.pointerLockElement !== host.canvas) lockAim()
         if (event.button === 0) { mouseFiring = true; syncMovement() }
@@ -285,7 +310,7 @@ const module: PlanetModule = {
     return {
       scene: visual.scene,
       camera: visual.camera,
-      update(dt: number) { if (!host.isInteractive()) { releaseAim(); syncMovement() } visual.update(dt); updateKills() },
+      update(dt: number) { if (!host.isInteractive()) { releaseAim(); syncMovement() } audio.setSceneState(host.isInteractive(), visual.isPlaying); visual.update(dt); updateKills() },
       dispose() {
         if (disposed) return
         disposed = true
@@ -306,6 +331,7 @@ const module: PlanetModule = {
         }
         pointers.clear()
         root.remove()
+        audio.dispose()
         world.dispose()
       },
     }

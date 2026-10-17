@@ -186,6 +186,13 @@ export class SystemMap {
       source.rel = 'noopener noreferrer'
       actions.append(source)
     }
+    if (project?.demo) {
+      const demo = element('a', 'system-map-source', 'Explore Clockwork City ↗')
+      demo.href = project.demo
+      demo.target = '_blank'
+      demo.rel = 'noopener noreferrer'
+      actions.append(demo)
+    }
     selection.append(actions)
     this.detail.prepend(selection)
   }

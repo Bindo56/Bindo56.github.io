@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "zone": "city",
+  "note": "The world is generated from OpenStreetMap as an exact copy of real Manhattan: 4 m per block, rotated 29° (avenues north-south). These points encode that transform exactly; the Minecraft-world mapping is kept in .cache/nju-jork-minecraft/georef.json.",
+  "points": [
+    { "id": "frame-1", "label": "Frame point 1", "world": [-1229, -563], "geo": [40.7855235, -74.0030731], "source": "exact (generated map)" },
+    { "id": "frame-2", "label": "Frame point 2", "world": [-512, -563], "geo": [40.7729488, -73.9733287], "source": "exact (generated map)" },
+    { "id": "frame-3", "label": "Frame point 3", "world": [205, -563], "geo": [40.7603741, -73.9435843], "source": "exact (generated map)" },
+    { "id": "frame-4", "label": "Frame point 4", "world": [-1229, 512], "geo": [40.7515113, -74.0277930], "source": "exact (generated map)" },
+    { "id": "frame-5", "label": "Frame point 5", "world": [-512, 512], "geo": [40.7389366, -73.9980486], "source": "exact (generated map)" },
+    { "id": "frame-6", "label": "Frame point 6", "world": [205, 512], "geo": [40.7263619, -73.9683042], "source": "exact (generated map)" },
+    { "id": "frame-7", "label": "Frame point 7", "world": [-1229, 1587], "geo": [40.7174991, -74.0525129], "source": "exact (generated map)" },
+    { "id": "frame-8", "label": "Frame point 8", "world": [-512, 1587], "geo": [40.7049244, -74.0227685], "source": "exact (generated map)" },
+    { "id": "frame-9", "label": "Frame point 9", "world": [205, 1587], "geo": [40.6923497, -73.9930241], "source": "exact (generated map)" }
+  ]
+}

@@ -128,7 +128,8 @@ export class PortfolioView {
       const actions = element('div', 'archive-actions')
       const planet = planetDefinitions.find(item => item.projectKey === project.key)
       if (planet) {
-        const world = element('a', 'archive-link primary', planet.slug === 'event-horizon' ? 'Play Solar DOTS ↗' : 'Explore ' + planet.title)
+        const worldLabel = planet.slug === 'event-horizon' ? 'Play Solar DOTS ↗' : planet.slug === 'npc-ecs' ? 'Open NPC ECS planet' : 'Explore ' + planet.title
+        const world = element('a', 'archive-link primary', worldLabel)
         world.href = pathForPlanet(planet)
         world.addEventListener('click', event => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -139,13 +140,14 @@ export class PortfolioView {
         actions.append(world)
       }
       if (project.github) actions.append(outbound('Original source ↗', project.github))
+      if (project.demo) actions.append(outbound('Explore Clockwork City ↗', project.demo))
       if (project.video) {
         const demo = element('button', 'archive-link', 'Watch demo ↗')
         demo.type = 'button'
         demo.addEventListener('click', () => this.onMedia(this.projectMedia(project)))
         actions.append(demo)
       }
-      if (!project.github && !project.video) {
+      if (!project.github && !project.video && !project.demo) {
         actions.append(element('span', 'archive-pending', 'Original source and demo pending'))
       }
       article.append(actions)

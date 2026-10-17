@@ -7,6 +7,7 @@ export default defineConfig({
       input: Object.fromEntries([
         ['main', 'index.html'],
         ...PLANET_SLUGS.map((slug) => [slug, `worlds/${slug}/index.html`]),
+        ['clockworkCity', 'worlds/clockwork-city/index.html'],
       ]),
     },
   },
