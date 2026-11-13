@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { loadProofCharacter, type ProofCharacter } from './npcProofCharacter'
+import { PublicProofScenario } from './npcProofPublic'
 import { m } from './skyline/kit'
 import './npcProof.css'
 
@@ -112,6 +113,7 @@ export class NpcProof {
   private workerPlaced = false
   private currentAction = ''
   private statusMessage = ''
+  private readonly publicScenario = import.meta.env.DEV ? null : new PublicProofScenario()
 
   constructor(
     private readonly scene: THREE.Scene,
@@ -129,7 +131,7 @@ export class NpcProof {
     this.panel.setAttribute('aria-label', 'NPC behavior first proof')
     this.panel.innerHTML = `
       <button type="button" class="nj-proof-close" aria-label="Close NPC proof">×</button>
-      <span class="nj-proof-kicker">FIRST PROOF · PERSISTENT NPC</span>
+      <span class="nj-proof-kicker">FIRST PROOF · ${this.publicScenario ? 'BROWSER PREVIEW' : 'PERSISTENT NPC'}</span>
       <h2>One worker, one living shift</h2>
       <p class="nj-proof-description">Follow a worker from home to a street cart. The job and cart continue while the camera is away.</p>
       <div class="nj-proof-status" role="status">Preparing scenario…</div>
@@ -153,7 +155,9 @@ export class NpcProof {
           <option value="96">96× · 15 second shift</option>
         </select>
       </label>
-      <small>This 25-minute sample shift repeats. Its clock and state are saved in local SQLite.</small>
+      <small>${this.publicScenario
+        ? 'This 25-minute sample shift repeats. Its clock is saved in this browser.'
+        : 'This 25-minute sample shift repeats. Its clock and state are saved in local SQLite.'}</small>
     `
     this.app.append(this.panel)
     this.panel.querySelector<HTMLButtonElement>('.nj-proof-close')!.addEventListener('click', () => this.close())
@@ -203,15 +207,6 @@ export class NpcProof {
     this.active = true
     this.panel.hidden = false
     this.app.classList.add('nj-proof-active')
-    if (!import.meta.env.DEV) {
-      this.statusMessage = 'The NPC scenario is available in the local demo. The public site does not run its simulation service.'
-      this.panel.querySelector<HTMLElement>('.nj-proof-grid')!.hidden = true
-      this.panel.querySelector<HTMLElement>('.nj-proof-controls')!.hidden = true
-      this.panel.querySelector<HTMLElement>('.nj-proof-speed')!.hidden = true
-      this.panel.querySelector<HTMLElement>('small')!.hidden = true
-      this.updatePanel()
-      return
-    }
     try {
       await this.start()
       this.follow()
@@ -245,9 +240,13 @@ export class NpcProof {
     if (this.inFlight) return
     this.inFlight = true
     try {
-      const response = await fetch('/api/npc-proof/state', { cache: 'no-store' })
-      if (!response.ok) throw new Error(`NPC scenario API returned ${response.status}. Run the local Vite server.`)
-      const next = await response.json() as NpcProofState
+      let next: NpcProofState
+      if (this.publicScenario) next = this.publicScenario.state()
+      else {
+        const response = await fetch('/api/npc-proof/state', { cache: 'no-store' })
+        if (!response.ok) throw new Error(`NPC scenario API returned ${response.status}. Run the local Vite server.`)
+        next = await response.json() as NpcProofState
+      }
       if (!Number.isFinite(next.worker?.x) || !Number.isFinite(next.worker?.z) || !next.cart) {
         throw new Error('NPC scenario returned an invalid position.')
       }
@@ -273,11 +272,14 @@ export class NpcProof {
 
   private async control(action: 'pause' | 'resume' | 'reset' | 'speed', speed?: number) {
     try {
-      const response = await fetch('/api/npc-proof/control', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, ...(speed === undefined ? {} : { speed }) }),
-      })
-      if (!response.ok) throw new Error(`Could not ${action} the scenario (${response.status}).`)
+      if (this.publicScenario) this.publicScenario.control(action, speed)
+      else {
+        const response = await fetch('/api/npc-proof/control', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ...(speed === undefined ? {} : { speed }) }),
+        })
+        if (!response.ok) throw new Error(`Could not ${action} the scenario (${response.status}).`)
+      }
       if (action === 'reset') this.workerPlaced = false
       await this.refresh()
     } catch (error) {
