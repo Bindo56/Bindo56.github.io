@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const planets = [
   ['voxel', 'Shardfall'],
@@ -10,6 +10,22 @@ const planets = [
   ['pixel-farm', 'Pixel Farm'],
   ['material-forge', 'Material Forge'],
 ] as const
+
+async function expectPlanetView(page: Page, slug: string, title: string): Promise<void> {
+  if (slug === 'voxel') {
+    await expect(page.getByRole('heading', { name: 'SHARDFALL' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Exit Shardfall' })).toBeVisible()
+  } else if (slug === 'stretch-squash') {
+    await expect(page.locator('.elastic-world')).toBeVisible()
+  } else if (slug === 'warfront') {
+    await expect(page.getByTestId('warfront-observer')).toBeVisible()
+  } else if (slug === 'bitboard') {
+    await expect(page.getByTestId('bitroom-game')).toBeVisible({ timeout: 15_000 })
+  } else {
+    await expect(page.getByTestId('world-title'), slug).toHaveText(title)
+    await expect(page.getByText(/world gameplay in development/i), slug).toBeVisible()
+  }
+}
 
 test('home keeps the portfolio and contact visible without beginning a mission', async ({ page }) => {
   const response = await page.goto('/')
@@ -41,15 +57,14 @@ test('Solar DOTS is reachable from the homepage and archive without flying', asy
   await expect(page.getByTestId('solar-start')).toBeVisible()
 })
 
-test('each planet is a direct and refreshable project landing', async ({ page }) => {
+test('each planet has a direct and refreshable route', async ({ page }) => {
   test.setTimeout(120_000)
   for (const [slug, title] of planets) {
     const response = await page.goto(`/worlds/${slug}/`)
     expect(response?.status(), slug).toBe(200)
-    await expect(page.getByTestId('world-title'), slug).toHaveText(title)
-    await expect(page.getByText(/world gameplay in development/i), slug).toBeVisible()
+    await expectPlanetView(page, slug, title)
     await page.reload()
-    await expect(page.getByTestId('world-title'), `${slug} after refresh`).toHaveText(title)
+    await expectPlanetView(page, slug, title)
     expect(await page.locator('canvas').count(), `${slug} canvas count`).toBeLessThanOrEqual(1)
   }
 })
@@ -64,7 +79,7 @@ test('Solar DOTS direct link and refresh keep its playable entry and original wo
     }
     await expect(page.getByTestId('world-title')).toHaveText('Solar DOTS')
     await expect(page.getByTestId('solar-start')).toBeVisible()
-    await expect(page.getByTestId('solar-world')).toContainText('This playable version runs in Three.js')
+    await expect(page.getByTestId('solar-world')).toContainText('Three.js interpretation of my Unity ECS and Burst project')
     const intro = page.locator('.solar-intro')
     await expect(intro.getByRole('link', { name: /Unity DOTS source/ })).toHaveAttribute('href', 'https://github.com/Bindo56/DOTS_SolarSystem')
     await expect(intro.getByRole('link', { name: /Watch original video/ })).toHaveAttribute('href', 'https://youtu.be/gQo_Rgpgzwg')
@@ -183,14 +198,14 @@ test('Solar DOTS direct link still shows its original work without WebGL', async
 
 test('planet exit and browser history keep one active shell', async ({ page }) => {
   await page.goto('/worlds/voxel/')
-  await expect(page.getByTestId('world-title')).toHaveText('Shardfall')
-  await page.getByTestId('exit-world').click()
+  await expectPlanetView(page, 'voxel', 'Shardfall')
+  await page.getByRole('button', { name: 'Exit Shardfall' }).click()
   await expect(page).toHaveURL('/')
   await expect(page.getByTestId('portfolio-button')).toBeVisible()
 
   await page.goBack()
   await expect(page).toHaveURL('/worlds/voxel/')
-  await expect(page.getByTestId('world-title')).toHaveText('Shardfall')
+  await expectPlanetView(page, 'voxel', 'Shardfall')
   expect(await page.locator('canvas').count()).toBeLessThanOrEqual(1)
   await page.goForward()
   await expect(page).toHaveURL('/')
@@ -214,6 +229,7 @@ test('flight reaches a preloaded planet and returns to the same canvas', async (
   await expect(page.getByTestId('enter-world')).toBeVisible()
   await expect(page.getByTestId('enter-world')).toBeEnabled()
   const orbitHeading = await page.getByTestId('ship-heading').textContent()
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur())
   await page.keyboard.down('ArrowLeft')
   await page.waitForTimeout(450)
   await page.keyboard.up('ArrowLeft')
@@ -227,8 +243,8 @@ test('flight reaches a preloaded planet and returns to the same canvas', async (
   await expect(page.getByTestId('enter-world')).toBeEnabled()
   await page.getByTestId('enter-world').click()
   await expect(page).toHaveURL('/worlds/voxel/')
-  await expect(page.getByTestId('world-title')).toHaveText('Shardfall')
-  await page.getByTestId('exit-world').click()
+  await expectPlanetView(page, 'voxel', 'Shardfall')
+  await page.getByRole('button', { name: 'Exit Shardfall' }).click()
   await expect(page).toHaveURL('/')
   expect(await page.locator('canvas').count()).toBe(1)
 })

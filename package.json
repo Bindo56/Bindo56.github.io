@@ -9,14 +9,26 @@
     "preview": "vite preview",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:e2e": "playwright test",
-    "test": "npm run build && npm run test:e2e"
+    "test": "npm run build && npm run test:e2e",
+    "population:seed:pilot": "node scripts/population-db.mjs seed --count=10000",
+    "population:seed": "node scripts/population-db.mjs seed --count=1000000",
+    "population:status": "node scripts/population-db.mjs status",
+    "population:check": "node scripts/population-db.mjs check",
+    "population:benchmark": "node scripts/benchmark-population.mjs",
+    "population:backup": "node scripts/population-db.mjs backup"
   },
   "dependencies": {
-    "three": "^0.186.0"
+    "three": "^0.186.0",
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@types/leaflet": "1.9",
+    "@types/node": "^24.19.2",
+    "@types/pngjs": "^6.0.5",
     "@types/three": "^0.186.0",
+    "jpeg-js": "^0.4.4",
+    "pngjs": "^7.0.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
     "vitest": "^5.0.3"

@@ -1,0 +1,39 @@
+* { box-sizing: border-box; }
+html, body, #app { width: 100%; height: 100%; margin: 0; }
+body { background: #10252b; color: #f3f2e9; font-family: Arial, Helvetica, sans-serif; }
+button, a { -webkit-tap-highlight-color: transparent; }
+.train-page { position: relative; width: 100%; min-height: 100%; height: 100dvh; overflow: hidden; }
+.train-stage, .train-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.train-stage canvas { touch-action: none; }
+.train-ui { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; padding: clamp(18px, 3vw, 40px); background: linear-gradient(180deg, rgba(7,21,26,.6), transparent 26%, transparent 71%, rgba(7,21,26,.75)); }
+.train-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+.train-back { pointer-events: auto; color: #dbf4f1; text-decoration: none; padding: 13px 0; }
+.train-back:hover { color: #69e8d4; }
+.train-kicker, .train-eyebrow { color: #83b3b3; }
+.train-intro { position: absolute; top: clamp(86px, 13vh, 150px); left: clamp(18px, 3vw, 40px); max-width: 380px; text-shadow: 0 2px 12px #081d22; }
+.train-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .22em; }
+.train-intro h1 { margin: 12px 0; font-size: clamp(30px, 5vw, 62px); line-height: .96; letter-spacing: -.055em; font-weight: 900; }
+.train-intro h1 span { color: #67d9cb; }
+.train-intro p { max-width: 300px; margin: 0; color: #c7d6d5; font-size: 14px; line-height: 1.5; }
+.train-footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.train-selector { display: flex; flex-wrap: wrap; gap: 8px; pointer-events: auto; }
+.train-selector button { min-height: 44px; border: 1px solid #5b7b80; border-radius: 3px; background: rgba(13,35,41,.86); color: #dbe9e7; padding: 0 15px; font-size: 11px; font-weight: 800; letter-spacing: .12em; cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
+.train-selector button:hover { background: #294b53; border-color: #a0d1ca; }
+.train-selector button[aria-pressed='true'] { background: #dce9e4; border-color: #dce9e4; color: #153039; }
+.train-dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; background: #2b8fba; }
+.metro-dot { background: #245b92; }
+.train-legend { display: flex; flex-direction: column; gap: 8px; color: #a9c4c4; text-align: right; font-size: 10px; font-weight: 800; letter-spacing: .1em; }
+.train-legend b { color: #79d6cc; margin-right: 8px; }
+button:focus-visible, a:focus-visible { outline: 2px solid #87f0dd; outline-offset: 3px; }
+@media (max-width: 700px) {
+  .train-header { font-size: 9px; }
+  .train-kicker { display: none; }
+  .train-intro { top: 84px; }
+  .train-intro h1 { font-size: 38px; }
+  .train-intro p { font-size: 13px; max-width: 270px; }
+  .train-footer { flex-direction: column-reverse; align-items: flex-start; gap: 15px; }
+  .train-legend { text-align: left; font-size: 9px; }
+  .train-selector { width: 100%; }
+  .train-selector button { flex: 1; padding: 0 7px; font-size: 9px; letter-spacing: .04em; }
+}
+@media (prefers-reduced-motion: reduce) { .train-selector button { transition: none; } }

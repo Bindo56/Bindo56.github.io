@@ -10,7 +10,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-stage, .nj-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .nj-stage canvas { touch-action: none; cursor: grab; }
 .nj-stage canvas:active { cursor: grabbing; }
+.nj-stage .nj-transit-network { z-index: 1; pointer-events: none; touch-action: auto; cursor: default; }
 .nj-road-labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.nj-transit-marker { position: absolute; transform: translate(-50%, -50%); max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 5px 8px; color: #dffff9; background: rgba(9, 35, 38, .95); border: 1px solid #49e4d0; border-radius: 15px; box-shadow: 0 2px 12px rgba(4, 19, 21, .6); font-size: 10px; font-weight: 800; pointer-events: auto; }
+.nj-transit-marker::before { content: '●'; margin-right: 5px; color: #49e4d0; }
+.nj-transit-marker.metro { color: #ffe9f5; border-color: #fb96cb; }
+.nj-transit-marker.metro::before { color: #fb96cb; }
+.nj-transit-marker:hover, .nj-transit-marker:focus-visible { background: #194c4e; }
+.nj-landmark-marker { position: absolute; transform: translate(-50%, -50%); max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 6px 9px; color: #152b31; background: #f4d29d; border: 2px solid #fff3d7; border-radius: 3px; box-shadow: 0 2px 12px rgba(4, 19, 21, .65); font-size: 10px; font-weight: 800; pointer-events: auto; }
+.nj-landmark-marker::before { content: '▣'; margin-right: 6px; }
+.nj-landmark-marker:hover, .nj-landmark-marker:focus-visible { background: #fff3d7; }
+.nj-tower-marker { color: #f4f0e6; background: #24414a; border-color: #d8b47d; }
+.nj-tower-marker::before { content: '▲'; color: #f0c587; }
+.nj-tower-marker:hover, .nj-tower-marker:focus-visible { background: #2f5560; }
+.nj-times-square-marker { color: #fff; background: #c8283c; border-color: #ffd36f; letter-spacing: .06em; }
+.nj-times-square-marker::before { content: '✦'; color: #ffd36f; }
+.nj-times-square-marker:hover, .nj-times-square-marker:focus-visible { background: #e23a4f; }
 .nj-street-name { position: absolute; transform: translate(-50%, -50%); padding: 4px 7px; color: #fff8e9; background: rgba(17, 40, 43, .87); border: 1px solid rgba(255, 211, 111, .64); border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; text-shadow: 0 1px 2px #0d2020; }
 .nj-building-marker { position: absolute; display: flex; align-items: center; gap: 5px; transform: translate(-50%, -50%); min-height: 34px; max-width: 180px; padding: 3px 8px 3px 4px; color: #173039; background: #f4e8d0; border: 1px solid #a88455; border-radius: 18px; box-shadow: 0 2px 12px rgba(4, 19, 21, .55); font-size: 10px; font-weight: 800; white-space: nowrap; pointer-events: auto; }
 .nj-building-marker svg { width: 24px; height: 24px; flex: none; padding: 4px; color: #fff9e9; background: #a76e41; border-radius: 50%; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
@@ -28,6 +43,26 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-status { display: flex; align-items: center; gap: 8px; color: #c5d6cb; font-size: 10px; font-weight: 700; letter-spacing: .14em; white-space: nowrap; }
 .nj-status i { width: 7px; height: 7px; background: #73d7ae; border-radius: 50%; box-shadow: 0 0 11px #73d7ae; }
 
+.nj-time-manager { flex: none; }
+.nj-time-toggle { min-height: 40px; padding: 0 11px; color: #f4e9d7; background: rgba(25, 55, 59, .9); border: 1px solid rgba(226, 185, 126, .65); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap; }
+.nj-time-toggle::after { content: 'PC'; display: inline-block; margin-left: 8px; color: #edc78f; font-size: 9px; letter-spacing: .1em; }
+.nj-time-toggle[data-source='network']::after { content: 'NET'; color: #73d7ae; }
+.nj-time-toggle:hover { background: #2f4a4e; }
+.nj-time-panel { position: absolute; top: calc(100% + 10px); right: clamp(18px, 3vw, 46px); z-index: 7; width: min(320px, calc(100vw - 20px)); padding: 20px; color: #f4eee2; background: rgba(12, 34, 38, .98); border: 1px solid #d6ad75; box-shadow: 0 16px 42px rgba(3, 15, 17, .45); }
+.nj-time-panel h2 { margin: 0 0 8px; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 28px; line-height: 1; }
+.nj-time-intro, .nj-time-status { margin: 0; color: #cbd9ce; font-size: 12px; line-height: 1.5; }
+.nj-time-clock { display: block; margin-top: 16px; color: #f0c587; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 42px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.nj-time-date { margin: 7px 0 0; font-size: 13px; font-weight: 700; }
+.nj-time-zone { margin: 4px 0 16px; color: #b9c9c0; font-size: 11px; overflow-wrap: anywhere; }
+.nj-time-sources { display: flex; gap: 8px; }
+.nj-time-sources button, .nj-time-refresh { min-height: 44px; padding: 0 12px; color: #f4e9d7; background: #17333a; border: 1px solid #bf9d70; font-size: 11px; font-weight: 800; }
+.nj-time-sources button { flex: 1; }
+.nj-time-sources button[aria-pressed='true'] { color: #10242a; background: #edc78f; }
+.nj-time-sources button:hover, .nj-time-refresh:hover { border-color: #fff3d7; }
+.nj-time-sources button:disabled, .nj-time-refresh:disabled { cursor: wait; opacity: .65; }
+.nj-time-refresh { margin-top: 8px; width: 100%; }
+.nj-time-status { margin-top: 12px; min-height: 18px; }
+
 .nj-intro { position: absolute; z-index: 2; top: clamp(80px, 10vh, 120px); left: clamp(18px, 4vw, 58px); width: min(260px, 28vw); padding: 21px 22px 20px; background: linear-gradient(145deg, rgba(10, 28, 32, .94), rgba(16, 42, 45, .84)); border: 1px solid rgba(230, 187, 125, .55); box-shadow: 0 22px 55px rgba(4, 20, 24, .28); backdrop-filter: blur(12px); }
 .nj-intro::after { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(230, 187, 125, .12); pointer-events: none; }
 .nj-eyebrow { color: #e8c28c; font-size: 9px; line-height: 1.5; font-weight: 700; letter-spacing: .18em; }
@@ -38,19 +73,32 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-zone-switch { position: absolute; z-index: 3; left: clamp(18px, 4vw, 58px); bottom: 68px; display: flex; gap: 8px; padding: 5px; background: rgba(9, 27, 32, .9); border: 1px solid rgba(226, 185, 126, .48); backdrop-filter: blur(14px); }
 .nj-zone-switch button { min-height: 44px; padding: 0 14px; color: #d1dfd5; background: transparent; border: 0; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .nj-zone-switch button:hover, .nj-zone-switch button[aria-pressed='true'] { color: #10242a; background: #edc78f; }
+.nj-station-picker { min-height: 44px; max-width: 195px; padding: 0 10px; color: #f5dfbb; background: #17333a; border: 1px solid #bf9d70; font-size: 10px; font-weight: 800; letter-spacing: .04em; cursor: pointer; }
+.nj-station-picker:focus-visible { outline: 2px solid #efc88f; outline-offset: 3px; }
 .nj-info { position: absolute; z-index: 3; right: clamp(18px, 3vw, 46px); bottom: 72px; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 15px; color: #e2e7dd; background: rgba(9, 27, 32, .9); border: 1px solid rgba(226, 185, 126, .42); font-size: 10px; font-weight: 700; letter-spacing: .1em; white-space: nowrap; backdrop-filter: blur(14px); }
 .nj-info-separator { height: 15px; width: 1px; background: rgba(226, 185, 126, .45); }
 #nj-view-mode { display: inline-flex; align-items: center; justify-content: center; min-height: 29px; padding: 0 9px; color: #152b31; background: #edc78f; font-size: 9px; font-weight: 800; letter-spacing: .11em; }
-.nj-controls { position: absolute; z-index: 3; right: clamp(18px, 3vw, 46px); top: 90px; display: flex; flex-direction: column; gap: 7px; }
+.nj-controls { position: absolute; z-index: 3; right: clamp(18px, 3vw, 46px); top: 90px; max-height: calc(100dvh - 250px); overflow-y: auto; display: flex; flex-direction: column; gap: 7px; scrollbar-width: thin; }
 .nj-controls button { width: 48px; height: 48px; padding: 0; color: #f4e9d7; background: rgba(9, 27, 32, .92); border: 1px solid rgba(226, 185, 126, .65); font-size: 24px; font-weight: 600; backdrop-filter: blur(12px); }
+.nj-controls button { flex: none; }
+.nj-controls .nj-train-models { display: flex; flex: none; align-items: center; justify-content: center; align-self: flex-end; width: 92px; min-height: 48px; padding: 0 6px; color: #f4e9d7; background: rgba(9, 27, 32, .92); border: 1px solid rgba(226, 185, 126, .65); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-align: center; text-decoration: none; backdrop-filter: blur(12px); }
+.nj-controls .nj-train-models:hover { color: #10242a; background: #edc78f; }
 .nj-controls #nj-street { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .nj-controls button:last-child { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .nj-controls #nj-roads { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; background: #53442d; }
 .nj-controls #nj-roads[aria-pressed='false'] { background: rgba(9, 27, 32, .92); }
+.nj-controls #nj-subway, .nj-controls #nj-metro { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.nj-controls #nj-subway[aria-pressed='true'] { color: #09272b; background: #49e4d0; border-color: #9dfff2; }
+.nj-controls #nj-metro[aria-pressed='true'] { color: #35172a; background: #fb96cb; border-color: #ffd0e7; }
 .nj-controls #nj-labels { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; background: #53442d; }
 .nj-controls #nj-labels[aria-pressed='false'] { background: rgba(9, 27, 32, .92); }
+.nj-controls #nj-brooklyn { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.nj-controls #nj-park { width: 92px; align-self: flex-end; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .nj-map-key { position: absolute; z-index: 3; left: clamp(18px, 4vw, 58px); bottom: 130px; padding: 8px 10px; color: #dfd6c5; background: rgba(9, 27, 32, .88); border: 1px solid rgba(226, 185, 126, .35); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 .nj-map-key b { color: #d4a96c; margin: 0 6px; }
+.nj-transit-key { position: absolute; z-index: 3; left: clamp(18px, 4vw, 58px); bottom: 167px; display: flex; flex-wrap: wrap; gap: 10px; max-width: min(520px, calc(100vw - 190px)); padding: 8px 10px; color: #e6f5ee; background: rgba(9, 27, 32, .92); border: 1px solid rgba(154, 237, 218, .5); font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+.nj-key-subway { color: #49e4d0; }
+.nj-key-metro { color: #fb96cb; }
 .nj-place-card { position: absolute; z-index: 5; right: clamp(18px, 3vw, 46px); bottom: 136px; width: min(310px, calc(100vw - 36px)); padding: 19px 20px; color: #f4eee2; background: rgba(12, 34, 38, .96); border: 1px solid #d6ad75; box-shadow: 0 16px 42px rgba(3, 15, 17, .35); }
 .nj-card-eyebrow { color: #e2bd82; font-size: 9px; font-weight: 800; letter-spacing: .13em; }
 .nj-place-card h2 { margin: 8px 0; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 28px; line-height: 1; }
@@ -65,7 +113,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-loading { position: absolute; z-index: 5; inset: 60px 0 48px; display: flex; align-items: center; justify-content: center; color: #efca95; background: rgba(11, 31, 35, .95); font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 23px; font-weight: 700; letter-spacing: .13em; }
 
 @media (max-width: 700px) {
-  .nj-topbar { min-height: 53px; padding: 0 12px; }
+  .nj-topbar { min-height: 53px; padding: 0 12px; gap: 8px; }
+  .nj-time-toggle { min-height: 36px; padding: 0 8px; font-size: 11px; }
+  .nj-time-panel { right: 10px; }
   .nj-world { display: none; }
   .nj-status { font-size: 8px; }
   .nj-intro { top: 65px; left: 10px; width: min(185px, 48vw); padding: 12px; }
@@ -73,17 +123,24 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
   .nj-eyebrow { font-size: 8px; letter-spacing: .1em; }
   .nj-intro h1 { margin: 7px 0; font-size: 36px; }
   .nj-intro p { font-size: 10px; line-height: 1.35; }
-  .nj-controls { right: 10px; top: 65px; gap: 8px; }
+  .nj-controls { right: 10px; top: 65px; max-height: calc(100dvh - 245px); gap: 8px; }
   .nj-controls button { width: 44px; height: 44px; }
   .nj-controls #nj-street { width: 82px; font-size: 9px; }
   .nj-controls #nj-roads { width: 82px; font-size: 9px; }
+  .nj-controls #nj-subway, .nj-controls #nj-metro { width: 82px; font-size: 9px; }
   .nj-controls #nj-labels { width: 82px; font-size: 9px; }
+  .nj-controls #nj-brooklyn { width: 82px; font-size: 9px; }
+  .nj-controls #nj-park { width: 82px; font-size: 9px; }
   .nj-controls button:last-child { width: 82px; font-size: 9px; }
   .nj-zone-switch { left: 9px; bottom: 68px; gap: 5px; }
+  .nj-station-picker { max-width: 133px; min-height: 44px; padding: 0 4px; font-size: 9px; }
   .nj-map-key { left: 9px; bottom: 126px; max-width: 210px; font-size: 8px; line-height: 1.4; }
+  .nj-transit-key { left: 9px; bottom: 183px; max-width: min(210px, calc(100vw - 120px)); gap: 4px 9px; font-size: 8px; }
   .nj-place-card { right: 9px; bottom: 193px; }
   .nj-street-name { font-size: 9px; }
   .nj-building-marker { max-width: 145px; min-height: 32px; font-size: 9px; }
+  .nj-transit-marker { max-width: 135px; font-size: 9px; }
+  .nj-landmark-marker { max-width: 145px; font-size: 9px; }
   .nj-zone-switch button { min-height: 44px; padding: 0 9px; font-size: 9px; }
   .nj-info { right: 9px; bottom: 126px; display: grid; grid-template-columns: auto auto; gap: 5px 10px; padding: 8px 9px; font-size: 9px; letter-spacing: .04em; }
   .nj-info-separator { display: none; }

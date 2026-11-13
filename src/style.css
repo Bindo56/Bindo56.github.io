@@ -685,6 +685,19 @@ a { color: inherit; }
 /* Solar DOTS is a playable world, so its controls float over the shared dark scene. */
 .hero-play-link { width: 100%; margin-top: 19px; }
 .flight-hero .hero-play-link { pointer-events: auto; }
+.hero-classic-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 4px;
+  color: var(--muted);
+  font: 600 12px Barlow, Arial, sans-serif;
+  letter-spacing: .04em;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  pointer-events: auto;
+}
+.hero-classic-link:hover { color: var(--accent); }
 
 .world-overlay, .solar-ui { position: absolute; inset: 0; pointer-events: none; }
 .world-overlay { z-index: 4; }

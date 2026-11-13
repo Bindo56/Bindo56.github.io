@@ -272,6 +272,9 @@ export class AppShell {
       })
       hero.append(play)
     }
+    const classic = node('a', 'hero-classic-link', 'Explore the original arena ↗')
+    classic.href = `${import.meta.env.BASE_URL}classic/`
+    hero.append(classic)
     const orbitLabel = node('div', 'orbit-label')
     orbitLabel.append(node('span', 'status-dot'), node('span', '', 'SHIP READY'), node('span', 'orbit-count', '9 PROJECT WORLDS'))
     hero.append(orbitLabel)
