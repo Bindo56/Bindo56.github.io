@@ -53,8 +53,9 @@ export const planetDefinitions = [
   },
   {
     slug: 'npc-ecs',
-    title: 'Clockwork City',
+    title: 'Earth Sim (New York)',
     projectKey: 'npc-ecs',
+    entryPath: 'worlds/clockwork-city/',
     position: initialOrbitPosition(orbitDefinitions['npc-ecs']),
     orbit: orbitDefinitions['npc-ecs'],
     radius: 44,
@@ -125,7 +126,8 @@ export function getPlanetBySlug(slug: string): PlanetDefinition | undefined {
 /** Uses the configured Vite base so links also work if the site moves under a repository path. */
 export function pathForPlanet(planet: PlanetDefinition): string {
   const base = normalizePath(import.meta.env.BASE_URL)
-  return `${base === '/' ? '' : base.slice(0, -1)}/worlds/${planet.slug}/`
+  const root = base === '/' ? '' : base.slice(0, -1)
+  return planet.entryPath ? `${root}/${planet.entryPath}` : `${root}/worlds/${planet.slug}/`
 }
 
 export function getPlanetByPath(pathname: string): PlanetDefinition | undefined {

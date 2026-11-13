@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 
 const planets = [
   ['voxel', 'Shardfall'],
-  ['npc-ecs', 'Clockwork City'],
+  ['npc-ecs', 'Earth Sim (New York)'],
   ['stretch-squash', 'Elastic Foundry'],
   ['drone-fleet', 'Drone Archipelago'],
   ['warfront', 'Warfront'],
@@ -17,6 +17,10 @@ async function expectPlanetView(page: Page, slug: string, title: string): Promis
     await expect(page.getByRole('button', { name: 'Exit Shardfall' })).toBeVisible()
   } else if (slug === 'stretch-squash') {
     await expect(page.locator('.elastic-world')).toBeVisible()
+  } else if (slug === 'npc-ecs') {
+    // This world opens the Manhattan city page directly instead of a planet vignette.
+    await expect(page).toHaveURL('/worlds/clockwork-city/')
+    await expect(page.locator('#nj-title')).toBeVisible()
   } else if (slug === 'warfront') {
     await expect(page.getByTestId('warfront-observer')).toBeVisible()
   } else if (slug === 'bitboard') {
@@ -341,16 +345,16 @@ test('interface theme never brightens either game scene', async ({ page }) => {
 test('choosing another destination reveals its travel action', async ({ page }) => {
   await page.goto('/')
 
-  const row = page.locator('.world-row').filter({ hasText: 'Clockwork City' })
-  await row.getByRole('button', { name: 'Select Clockwork City in flight manifest' }).click()
+  const row = page.locator('.world-row').filter({ hasText: 'Earth Sim (New York)' })
+  await row.getByRole('button', { name: 'Select Earth Sim (New York) in flight manifest' }).click()
   await expect(row).toHaveClass(/selected/)
   await expect(row.locator('.world-expanded')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Warp to orbit around Shardfall', includeHidden: true })).toBeHidden()
-  const warp = row.getByRole('button', { name: 'Warp to orbit around Clockwork City' })
+  const warp = row.getByRole('button', { name: 'Warp to orbit around Earth Sim (New York)' })
   await expect(warp).toBeVisible()
   await warp.click()
   await expect(page.getByTestId('enter-world')).toBeEnabled()
-  await expect(page.locator('.approach-card')).toContainText('Clockwork City')
+  await expect(page.locator('.approach-card')).toContainText('Earth Sim (New York)')
 })
 
 test('mobile navigation and all destinations remain reachable', async ({ browser }) => {

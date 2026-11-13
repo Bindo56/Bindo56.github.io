@@ -15,10 +15,18 @@ describe('shareable planet routes', () => {
     expect(new Set(urls).size).toBe(9)
 
     for (const planet of planetDefinitions) {
-      expect(pathForPlanet(planet)).toBe(`/worlds/${planet.slug}/`)
-      expect(getPlanetByPath(pathForPlanet(planet))).toBe(planet)
-      expect(getPlanetByPath(`${pathForPlanet(planet)}index.html`)).toBe(planet)
+      const route = `/worlds/${planet.slug}/`
+      // A world with its own entry page links there; its planet route still resolves for old links.
+      expect(pathForPlanet(planet)).toBe('entryPath' in planet ? `/${planet.entryPath}` : route)
+      expect(getPlanetByPath(route)).toBe(planet)
+      expect(getPlanetByPath(`${route}index.html`)).toBe(planet)
     }
+  })
+
+  it('opens Earth Sim (New York) directly from the NPC ECS world', () => {
+    const planet = planetDefinitions.find(item => item.slug === 'npc-ecs')!
+    expect(planet.title).toBe('Earth Sim (New York)')
+    expect(pathForPlanet(planet)).toBe('/worlds/clockwork-city/')
   })
 
   it('recognizes home and rejects unknown or lookalike world paths', () => {

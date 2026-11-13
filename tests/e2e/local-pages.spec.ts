@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('Clockwork City and Train Models render from their published routes', async ({ page }) => {
+test('Earth Sim (New York) and Train Models render from their published routes', async ({ page }) => {
   const city = await page.goto('/worlds/clockwork-city/')
   expect(city?.status()).toBe(200)
   await expect(page.locator('#nj-title')).toBeVisible()
@@ -9,7 +9,7 @@ test('Clockwork City and Train Models render from their published routes', async
   const trains = await page.goto('/worlds/train-models/')
   expect(trains?.status()).toBe(200)
   await expect(page.locator('.train-intro h1')).toContainText('METRO')
-  await expect(page.getByRole('link', { name: /CLOCKWORK CITY/ })).toHaveAttribute('href', '/worlds/clockwork-city/')
+  await expect(page.getByRole('link', { name: /EARTH SIM \(NEW YORK\)/ })).toHaveAttribute('href', '/worlds/clockwork-city/')
 })
 
 test('classic arena renders and links back to the galaxy', async ({ page }) => {

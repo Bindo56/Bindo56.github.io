@@ -138,7 +138,7 @@ export const projects: readonly Project[] = [
     {
         key: 'clockwork-city',
         id: 'World 08',
-        title: 'ClockWork City',
+        title: 'Earth Sim (New York)',
         summary: 'The supplied Nju Jork Minecraft city rendered as an optimized, zoomable Three.js world model with streamed 3D regions.',
         tech: ['Three.js', 'Minecraft Java', 'Anvil', 'Streamed 3D'],
         github: `${import.meta.env.BASE_URL}worlds/clockwork-city/`,

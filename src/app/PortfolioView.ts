@@ -128,7 +128,7 @@ export class PortfolioView {
       const actions = element('div', 'archive-actions')
       const planet = planetDefinitions.find(item => item.projectKey === project.key)
       if (planet) {
-        const worldLabel = planet.slug === 'event-horizon' ? 'Play Solar DOTS ↗' : planet.slug === 'npc-ecs' ? 'Open NPC ECS planet' : 'Explore ' + planet.title
+        const worldLabel = planet.slug === 'event-horizon' ? 'Play Solar DOTS ↗' : 'entryPath' in planet ? 'Open ' + planet.title + ' ↗' : 'Explore ' + planet.title
         const world = element('a', 'archive-link primary', worldLabel)
         world.href = pathForPlanet(planet)
         world.addEventListener('click', event => {
@@ -140,7 +140,8 @@ export class PortfolioView {
         actions.append(world)
       }
       if (project.github) actions.append(outbound('Original source ↗', project.github))
-      if (project.demo) actions.append(outbound('Explore Clockwork City ↗', project.demo))
+      // A world that opens its own page already links there.
+      if (project.demo && !(planet && 'entryPath' in planet)) actions.append(outbound('Explore Earth Sim (New York) ↗', project.demo))
       if (project.video) {
         const demo = element('button', 'archive-link', 'Watch demo ↗')
         demo.type = 'button'

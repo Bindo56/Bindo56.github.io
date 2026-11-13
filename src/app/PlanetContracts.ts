@@ -24,6 +24,8 @@ export interface PlanetDefinition {
   orbit: OrbitDefinition
   radius: number
   color: number
+  /** A separate page, relative to the site base, that this world opens instead of its planet vignette. */
+  entryPath?: string
   load: () => Promise<PlanetModule>
 }
 

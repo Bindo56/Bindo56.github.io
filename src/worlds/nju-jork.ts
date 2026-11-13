@@ -54,7 +54,7 @@ app.innerHTML = `
   <div class="nj-ui">
     <header class="nj-topbar">
       <a href="${import.meta.env.BASE_URL}" class="nj-back">← <span>SYSTEM ZERO</span></a>
-      <span class="nj-world">CLOCKWORK CITY <b>/</b> WORLD MODEL</span>
+      <span class="nj-world">EARTH SIM (NEW YORK) <b>/</b> WORLD MODEL</span>
       <span class="nj-status" id="nj-status"><i></i> PREPARING CITY</span>
     </header>
     <section class="nj-intro" aria-labelledby="nj-title">

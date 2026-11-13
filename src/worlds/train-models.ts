@@ -9,7 +9,7 @@ app.innerHTML = `
     <div class="train-stage" aria-label="Three-dimensional Minecraft-style subway and Metro-North train models"></div>
     <div class="train-ui">
       <header class="train-header">
-        <a class="train-back" href="${import.meta.env.BASE_URL}worlds/clockwork-city/">← CLOCKWORK CITY</a>
+        <a class="train-back" href="${import.meta.env.BASE_URL}worlds/clockwork-city/">← EARTH SIM (NEW YORK)</a>
         <span class="train-kicker">SYSTEM ZERO / MODEL STUDY 01</span>
       </header>
       <section class="train-intro">

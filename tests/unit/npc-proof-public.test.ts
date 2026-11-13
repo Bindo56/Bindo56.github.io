@@ -3,7 +3,7 @@ import { PublicProofScenario, publicProofState } from '../../src/worlds/npcProof
 
 afterEach(() => vi.restoreAllMocks())
 
-describe('public ClockWork City NPC preview', () => {
+describe('public Earth Sim (New York) NPC preview', () => {
   it('keeps the worker and customers aligned with the resized cart', () => {
     const state = publicProofState(480_000, 24, false)
     expect(state.worker.phase).toBe('serve')

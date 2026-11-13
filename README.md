@@ -1,6 +1,6 @@
 # System Zero
 
-A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Pilot a procedural ship around System Zero, where nine project worlds orbit a stylized black-hole centerpiece. Open the System map to see the worlds' current positions, choose a destination, and warp or fly there. The portfolio also includes playable project worlds and a separate ClockWork City map.
+A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published at [bindo56.github.io](https://bindo56.github.io/). Pilot a procedural ship around System Zero, where nine project worlds orbit a stylized black-hole centerpiece. Open the System map to see the worlds' current positions, choose a destination, and warp or fly there. The portfolio also includes playable project worlds and a separate Earth Sim (New York) map.
 
 ## Run locally
 
@@ -68,9 +68,9 @@ The Voxel original repository and demo are not public yet. Its landing intention
 The first release uses no downloaded model. src/space/VisualProvider.ts defines the future art-source boundary. A later provider can use Three.js GLTFLoader to load local, custom, or properly licensed GLB assets, then supply a ship and planet groups to SpaceSession. Keep the procedural meshes as an immediate fallback; abort stale loads and release geometries, materials, and textures when a visual is replaced. The model provider should remain separate from route and flight logic.
 
 
-## ClockWork City
+## Earth Sim (New York)
 
-Project decisions and deferred simulation plans are recorded in [ClockWork City memory](docs/CLOCKWORK_CITY_MEMORY.md).
+Earth Sim (New York), formerly called ClockWork City, is the NPC ECS project world. Opening `/worlds/npc-ecs/` or choosing its planet goes straight to the city page. Project decisions and deferred simulation plans are recorded in [ClockWork City memory](docs/CLOCKWORK_CITY_MEMORY.md).
 
 Open `/worlds/clockwork-city/` for the Manhattan-shaped **Nju Jork** city. Its street layout, building footprints, parks, and shoreline come from OpenStreetMap; matching buildings reuse blocks from the supplied Minecraft Java city. The city is scaled at 3 metres per block. Roads have a single black surface, with wider grey footpaths and no colored bike lanes or painted lane markings. Drag to pan, scroll or pinch to zoom, and Shift + drag to orbit. **ROADS OFF** is the default; turn it on to inspect street centerlines and route nodes. **LABELS ON** shows street names and building markers; select a marker for its address, ID, coordinates, and footprint.
 
