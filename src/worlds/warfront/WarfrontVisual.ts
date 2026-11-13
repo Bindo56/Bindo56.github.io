@@ -287,7 +287,7 @@ export class WarfrontVisual {
     this.playerAnchor.scale.setScalar(1 / GROUND_SCALE)
     this.playerAnchor.add(fighter.root)
     fighter.root.position.set(0, SOLDIER_GROUND_CLEARANCE, 0)
-    fighter.root.rotation.y = 0
+    fighter.root.rotation.set(0, 0, 0)
     this.refreshGroundObstacles()
     this.entryCamera.copy(normal).multiplyScalar(GROUND_RADIUS + 5).addScaledVector(this.playerForward, -2)
     this.camera.position.copy(this.entryCamera)
@@ -354,7 +354,7 @@ export class WarfrontVisual {
 
   aim(deltaX: number, deltaY: number): void {
     if (!this.selected) return
-    this.playerForward.applyAxisAngle(this.playerAnchor.position.clone().normalize(), deltaX * 0.0035)
+    this.playerForward.applyAxisAngle(this.playerAnchor.position.clone().normalize(), -deltaX * 0.0035)
     this.orientPlayer()
     this.pitch = THREE.MathUtils.clamp(this.pitch - deltaY * 0.0028, -0.55, 0.45)
   }
@@ -365,6 +365,11 @@ export class WarfrontVisual {
     const basisX = normal.clone().cross(this.playerForward).normalize()
     const basis = new THREE.Matrix4().makeBasis(basisX, normal, this.playerForward)
     this.playerAnchor.quaternion.setFromRotationMatrix(basis)
+  }
+
+  private screenRight(normal: THREE.Vector3): THREE.Vector3 {
+    // The chase camera looks along +forward; its screen right is forward × up.
+    return this.playerForward.clone().cross(normal).normalize()
   }
 
   private refreshGroundObstacles(): void {
@@ -639,10 +644,10 @@ export class WarfrontVisual {
     if (!fighter) return
     const oldNormal = this.playerAnchor.position.clone().normalize()
     if (this.turnSpeed !== 0) {
-      this.playerForward.applyAxisAngle(oldNormal, this.turnSpeed * frame * 2.3)
+      this.playerForward.applyAxisAngle(oldNormal, -this.turnSpeed * frame * 2.3)
       this.orientPlayer()
     }
-    const right = oldNormal.clone().cross(this.playerForward).normalize()
+    const right = this.screenRight(oldNormal)
     const movement = this.playerForward.clone().multiplyScalar(this.moveForward).addScaledVector(right, this.moveStrafe)
     if (movement.lengthSq() > 1) movement.normalize()
     if (movement.lengthSq() > 0) {
@@ -678,7 +683,7 @@ export class WarfrontVisual {
     } else this.footstepTimer = 0.1
     const hop = this.hopTime > 0 ? Math.sin((1 - this.hopTime / 0.52) * Math.PI) * 0.11 : 0
     fighter.root.position.set(0, SOLDIER_GROUND_CLEARANCE + hop, 0)
-    fighter.root.rotation.y = 0
+    fighter.root.rotation.set(0, 0, 0)
     const stride = this.elapsed * 12
     const walk = movement.lengthSq() > 0 ? 0.38 : 0.045
     fighter.leftLeg.rotation.x = Math.sin(stride) * walk
@@ -694,11 +699,11 @@ export class WarfrontVisual {
     const worldForward = this.playerForward
     const aimDirection = worldForward.clone().addScaledVector(normal, this.pitch + this.recoil * 0.07).normalize()
     const desired = normal.clone().multiplyScalar(GROUND_RADIUS + 0.48).addScaledVector(worldForward, -0.72 - this.recoil * 0.09)
-    desired.addScaledVector(normal.clone().cross(worldForward).normalize(), 0.14)
+    desired.addScaledVector(this.screenRight(normal), 0.14)
     if (this.buildingObstacles.some(building => building.detail.visible && desired.distanceToSquared(building.center) < 0.48 * 0.48)) {
       desired.addScaledVector(normal, 0.65)
     }
-    if (this.cameraShake > 0) desired.addScaledVector(normal.clone().cross(worldForward).normalize(), (Math.random() - 0.5) * this.cameraShake * 0.12)
+    if (this.cameraShake > 0) desired.addScaledVector(this.screenRight(normal), (Math.random() - 0.5) * this.cameraShake * 0.12)
     if (this.entryProgress < 1) {
       this.entryProgress = Math.min(1, this.entryProgress + frame / 0.75)
       const t = this.reducedMotion ? 1 : this.entryProgress * this.entryProgress * (3 - 2 * this.entryProgress)
@@ -726,7 +731,7 @@ export class WarfrontVisual {
     fighter.muzzle.visible = true
     this.globe.updateMatrixWorld(true)
     const normal = this.playerAnchor.position.clone().normalize()
-    const right = normal.clone().cross(this.playerForward).normalize()
+    const right = this.screenRight(normal)
     const start = fighter.muzzle.getWorldPosition(new THREE.Vector3())
     this.focusEnemyOnShot(start, this.playerForward.clone().addScaledVector(normal, this.pitch).normalize(), fighter.team)
     const pelletCount = weapon === 'scattergun' ? 7 : 1
@@ -777,7 +782,7 @@ export class WarfrontVisual {
         const end = target.root.getWorldPosition(this.tempEnd).clone()
         if (target === player) {
           const normal = this.playerAnchor.position.clone().normalize()
-          const right = normal.clone().cross(this.playerForward).normalize()
+          const right = this.screenRight(normal)
           const lead = Math.min(1.2, playerDistance / (weapon === 'rocket' ? 2.1 : weapon === 'scattergun' ? 3.2 : 3.8)) * 0.65
           end.addScaledVector(this.playerForward, this.moveForward * 0.95 * lead)
             .addScaledVector(right, this.moveStrafe * 0.95 * lead)
