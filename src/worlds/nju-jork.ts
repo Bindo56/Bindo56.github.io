@@ -49,7 +49,7 @@ const DETAIL_VIEW_HEIGHT = 55
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
-  <div class="nj-stage" aria-label="Three-dimensional Nju Jork city model"></div>
+  <div class="nj-stage" aria-label="Three-dimensional New York Sim city model"></div>
   <div class="nj-road-labels" id="nj-road-labels" aria-label="Street and building markers"></div>
   <div class="nj-ui">
     <header class="nj-topbar">
@@ -59,7 +59,7 @@ app.innerHTML = `
     </header>
     <section class="nj-intro" aria-labelledby="nj-title">
       <span class="nj-eyebrow">REAL MANHATTAN · MINECRAFT BLOCKS</span>
-      <h1 id="nj-title">NJU<br><em>JORK</em></h1>
+      <h1 id="nj-title">NEW YORK<br><em>SIM</em></h1>
       <p>Explore real New York streets and buildings, matched from OpenStreetMap. Select a marker to see its place name and street address.</p>
     </section>
     <div class="nj-zone-switch" id="nj-zone-switch" role="group" aria-label="World area"></div>
@@ -124,7 +124,7 @@ const camera = new THREE.PerspectiveCamera(55, 1, .5, 12000)
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, innerWidth < 700 ? 1.25 : 1.6))
 renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.domElement.setAttribute('aria-label', 'Nju Jork model. Drag to pan, scroll to zoom, Shift and drag to orbit.')
+renderer.domElement.setAttribute('aria-label', 'New York Sim model. Drag to pan, scroll to zoom, Shift and drag to orbit.')
 stage.append(renderer.domElement)
 const transitOverlay = new TransitOverlay(stage)
 
@@ -1180,7 +1180,7 @@ function buildLandmarkModels() {
 async function loadWorld() {
   try {
     const response = await fetch(`${assetBase}manifest.json`)
-    if (!response.ok) throw new Error('Nju Jork model manifest is unavailable')
+    if (!response.ok) throw new Error('New York Sim model manifest is unavailable')
     manifest = await response.json() as Manifest
     if (manifest.brooklynBridge) {
       brooklynModel = buildBrooklynBridge(manifest.brooklynBridge)

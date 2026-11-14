@@ -2,7 +2,7 @@ import './calibrate.css'
 import { loadGoogleMap, loadOsmMap, type MapAdapter, type MapEvents } from './calibrateMaps'
 import { createGeoref, googleMapsUrl, type CheckResult, type ControlPoint, type GeoPoint, type Georef, type GeorefData } from './georef'
 
-// Dev tool: match spots on the Nju Jork world map with real spots on Google Maps
+// Dev tool: match spots on the New York Sim world map with real spots on Google Maps
 // (or OpenStreetMap when there is no working key; ?map=osm forces it).
 // Each matched pair tightens the world ↔ lat/lon conversion saved in georef.json.
 
@@ -30,9 +30,9 @@ app.innerHTML = `
     <button type="button" class="cal-btn" id="cal-save" disabled>Save points</button>
   </header>
   <main class="cal-main">
-    <section class="cal-pane" aria-label="Nju Jork world map">
+    <section class="cal-pane" aria-label="New York Sim world map">
       <canvas id="cal-world"></canvas>
-      <div class="cal-tag">NJU JORK WORLD</div>
+      <div class="cal-tag">NEW YORK SIM WORLD</div>
       <div class="cal-readout" id="cal-world-readout">Drag to pan · scroll to zoom · click to mark a spot (snaps to intersections, Shift-click to place freely)</div>
     </section>
     <section class="cal-pane" aria-label="Real-world map">

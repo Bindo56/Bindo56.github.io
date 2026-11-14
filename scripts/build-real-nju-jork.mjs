@@ -1,4 +1,4 @@
-// Build the Nju Jork world from real Manhattan geometry in Minecraft block style.
+// Build the New York Sim world from real Manhattan geometry in Minecraft block style.
 // Island outline, streets, sidewalks, parks and building footprints come from OpenStreetMap; where the
 // original Minecraft build has a building at the same real spot, its blocks (roof colours, setbacks,
 // heights) are copied into the real footprint. Elsewhere buildings are generated at their OSM height.
@@ -742,7 +742,7 @@ const roadNetwork = {
   coordinateSystem: `World blocks: ${METERS_PER_BLOCK} m per block, rotated ${GRID_BEARING}° so Manhattan avenues run north-south (see georef.json)`,
   modes: ['car', 'pedestrian', 'npc'],
   zones: { city: { nodes: usedNodes, roads, buildings: markers } },
-  labelSource: 'Streets, building footprints, names and addresses from OpenStreetMap (© OpenStreetMap contributors, ODbL). Building blocks reuse the Nju Jork Minecraft models where they exist.',
+  labelSource: 'Streets, building footprints, names and addresses from OpenStreetMap (© OpenStreetMap contributors, ODbL). Building blocks reuse Minecraft models where they exist.',
 }
 writeFileSync(resolve(outDir, 'road-network.json'), JSON.stringify(roadNetwork))
 
@@ -752,7 +752,7 @@ const startReal = oldGeoref.toGeo({ x: sourceZone.start[0], z: sourceZone.start[
 const start = geoToWorld(startReal.lat, startReal.lon).map(Math.round)
 const bounds = [originX, originZ, originX + W, originZ + H]
 const manifest = {
-  source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) with Nju Jork 2024 07 Minecraft building models',
+  source: 'OpenStreetMap (© OpenStreetMap contributors, ODbL) with Minecraft building models',
   step: 2, detailStep: 1, detailPixels: TILE, baseY: BASE_Y, tileBlocks: TILE, tilePixels: TILE / 2,
   roadNetwork: 'road-network.json', transitNetwork: 'transit-network.json', bridgeRise: BRIDGE_RISE, bridgePiers,
   brooklynBridge: { towers: brooklynTowers, deckRise: BRIDGE_RISE },
@@ -761,7 +761,7 @@ const manifest = {
     parkPlacement: 'OpenStreetMap green polygons and original Minecraft canopy density', count: [...treeStats.values()].reduce((a, b) => a + b, 0) },
   roadWidthBlocks: Math.round(CARRIAGEWAY.residential * ROAD_WIDTH_SCALE / METERS_PER_BLOCK),
   footpathWidthBlocks: Math.round(SIDEWALK_METERS / METERS_PER_BLOCK), metersPerBlock: METERS_PER_BLOCK,
-  zones: [{ id: 'city', name: 'Nju Jork', bounds, start, overview: 'city-overview.jpg', tiles }],
+  zones: [{ id: 'city', name: 'New York Sim', bounds, start, overview: 'city-overview.jpg', tiles }],
 }
 writeFileSync(resolve(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 

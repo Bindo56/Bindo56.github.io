@@ -1,5 +1,5 @@
 {
-  "source": "OpenStreetMap (© OpenStreetMap contributors, ODbL) with Nju Jork 2024 07 Minecraft building models",
+  "source": "OpenStreetMap (© OpenStreetMap contributors, ODbL) with Minecraft building models",
   "step": 2,
   "detailStep": 1,
   "detailPixels": 512,
@@ -524,7 +524,7 @@
   "zones": [
     {
       "id": "city",
-      "name": "Nju Jork",
+      "name": "New York Sim",
       "bounds": [
         -1536,
         -1024,
