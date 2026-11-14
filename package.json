@@ -15,7 +15,13 @@
     "population:status": "node scripts/population-db.mjs status",
     "population:check": "node scripts/population-db.mjs check",
     "population:benchmark": "node scripts/benchmark-population.mjs",
-    "population:backup": "node scripts/population-db.mjs backup"
+    "population:backup": "node scripts/population-db.mjs backup",
+    "population:map:100k": "node scripts/npc-weekly.mjs seed --count=100000",
+    "population:week:status": "node scripts/npc-weekly.mjs status",
+    "population:week:check": "node scripts/npc-weekly.mjs check",
+    "population:places:fetch": "node scripts/fetch-nyc-place-sources.mjs",
+    "population:places:build": "node scripts/build-nyc-place-catalog.mjs",
+    "population:places:apply": "node scripts/apply-nyc-place-catalog.mjs"
   },
   "dependencies": {
     "three": "^0.186.0",

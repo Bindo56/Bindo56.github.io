@@ -69,7 +69,10 @@ test('each planet has a direct and refreshable route', async ({ page }) => {
     await expectPlanetView(page, slug, title)
     await page.reload()
     await expectPlanetView(page, slug, title)
-    expect(await page.locator('canvas').count(), `${slug} canvas count`).toBeLessThanOrEqual(1)
+    // npc-ecs redirects to Clockwork City, which has one WebGL canvas and one
+    // transit overlay canvas. The other planet pages use a single canvas.
+    if (slug === 'npc-ecs') await expect(page.locator('.nj-stage canvas')).toHaveCount(2)
+    else expect(await page.locator('canvas').count(), `${slug} canvas count`).toBeLessThanOrEqual(1)
   }
 })
 

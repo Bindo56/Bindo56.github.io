@@ -45,6 +45,9 @@ type RoadNode = { id: string; x: number; z: number; kind: 'intersection' | 'corn
 type Road = { id: string; name: string; from: string; to: string; length: number; bridge?: boolean; width: number; sidewalk?: boolean; points: [number, number][] }
 type Building = { id: string; name: string; address: string; streetId: string | null; icon: 'building'; x: number; z: number; roofY: number; areaBlocks: number; bounds: [number, number, number, number]; nameSource?: 'osm-place' | 'osm-address' | 'plan' }
 type RoadNetwork = { zones: Record<string, { nodes: RoadNode[]; roads: Road[]; buildings: Building[] }> }
+type MappedBuilding = { id: string; name: string; address: string; x: number; z: number; uses: string[]; unitsRes: number; officeAreaSqFt: number; sources: { dataset: string; id: string; match?: string }[] }
+type MappedPlace = { id: string; anchorId: string; kind: string; label: string; source: string; sourceId: string; match: string; distanceM: number | null }
+type PlaceCatalog = { buildings: MappedBuilding[]; places: MappedPlace[]; sources: Record<string, string> }
 const DETAIL_VIEW_HEIGHT = 55
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -60,7 +63,7 @@ app.innerHTML = `
     <section class="nj-intro" aria-labelledby="nj-title">
       <span class="nj-eyebrow">REAL MANHATTAN · MINECRAFT BLOCKS</span>
       <h1 id="nj-title">NEW YORK<br><em>SIM</em></h1>
-      <p>Explore real New York streets and buildings, matched from OpenStreetMap. Select a marker to see its place name and street address.</p>
+      <p>Explore mapped homes, offices, cafes and other places in this part of Manhattan. Select MAP PLACES below to filter the view.</p>
     </section>
     <div class="nj-zone-switch" id="nj-zone-switch" role="group" aria-label="World area"></div>
     <div class="nj-info" aria-live="polite">
@@ -84,7 +87,7 @@ app.innerHTML = `
       <a class="nj-train-models" href="${import.meta.env.BASE_URL}worlds/train-models/">TRAIN MODELS</a>
       <button type="button" id="nj-overview">OVERVIEW</button>
     </div>
-    <div class="nj-map-key">▣ BUILDINGS <b>·</b> STREET NAMES <b>·</b> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color: inherit">© OPENSTREETMAP</a> <b>·</b> <a href="https://data.cityofnewyork.us/Environment/Forestry-Tree-Points/hn5i-inap" target="_blank" rel="noopener" style="color: inherit">TREES: NYC PARKS</a></div>
+    <div class="nj-map-key">▣ BUILDINGS <b>·</b> STREET NAMES <b>·</b> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color: inherit">© OPENSTREETMAP</a> <b>·</b> <a href="https://data.cityofnewyork.us/d/64uk-42ks" target="_blank" rel="noopener" style="color: inherit">NYC PLUTO</a> <b>·</b> <a href="https://data.cityofnewyork.us/d/43nn-pn8j" target="_blank" rel="noopener" style="color: inherit">NYC HEALTH</a></div>
     <div class="nj-transit-key" id="nj-transit-key" hidden><span class="nj-key-subway">- - SUBWAY ROUTE NODES · SOLID BRIDGE RAIL</span><span class="nj-key-metro">- - METRO-NORTH ROUTE NODES</span><span>○ STATION ENTRANCES · MTA STATIC GTFS</span></div>
     <aside class="nj-place-card" id="nj-place-card" hidden aria-live="polite"></aside>
     <div class="nj-help">DRAG TO PAN <b>·</b> SCROLL OR PINCH TO ZOOM <b>·</b> SHIFT + DRAG TO ORBIT</div>
@@ -110,6 +113,9 @@ const labelButton = app.querySelector<HTMLButtonElement>('#nj-labels')!
 const transitKey = app.querySelector<HTMLElement>('#nj-transit-key')!
 const placeCard = app.querySelector<HTMLElement>('#nj-place-card')!
 const assetBase = `${import.meta.env.BASE_URL}assets/nju-jork/`
+let placeCatalog: PlaceCatalog | null = null
+let mappedKind = ''
+const mappedById = new Map<string, MappedPlace>()
 
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#152b31')
@@ -496,6 +502,33 @@ function updateMapLabels(now: number) {
     roadLabels.replaceChildren(...items)
     return
   }
+  if (mappedKind && placeCatalog) {
+    const mappedBuildings = placeCatalog.buildings.filter((building) => building.uses.includes(mappedKind))
+    const byBuilding = new Map(placeCatalog.buildings.map((building) => [building.id, building]))
+    const candidates = mappedKind === 'home' || mappedKind === 'office'
+      ? mappedBuildings.map((building) => ({ id: building.id, label: building.address || building.name,
+        x: building.x, z: building.z, building }))
+      : placeCatalog.places.filter((item) => item.kind === mappedKind).map((item) => {
+        const building = byBuilding.get(item.anchorId)
+        return building ? { id: item.id, label: item.label, x: building.x, z: building.z, building } : null
+      }).filter((item): item is NonNullable<typeof item> => item !== null)
+    candidates.sort((a, b) => Math.hypot(a.x - focus.x, a.z - focus.z) - Math.hypot(b.x - focus.x, b.z - focus.z))
+    let shown = 0
+    for (const item of candidates) {
+      if (shown >= (viewHeight > 220 ? 12 : 30)) break
+      if (Math.abs(item.x - focus.x) > radius || Math.abs(item.z - focus.z) > radius) continue
+      const marker = document.createElement('button')
+      marker.type = 'button'
+      marker.className = 'nj-mapped-marker'
+      marker.dataset.mapped = item.id
+      marker.dataset.z = String(item.z)
+      marker.textContent = item.label
+      marker.title = `${mappedKind.replace('_', ' ')} · ${item.label}`
+      if (place(marker, item.x, Math.max(2, item.building ? (activeBuildings.find((building) => building.id === item.building.id)?.roofY ?? manifest.baseY) - manifest.baseY + .6 : 2), 125, 34)) shown++
+    }
+    roadLabels.replaceChildren(...items)
+    return
+  }
   const seenNames = new Set<string>()
   const streetLimit = viewHeight < 35 ? 10 : 16
   const streets = activeRoads.filter((road) => {
@@ -537,6 +570,24 @@ function updateMapLabels(now: number) {
 }
 
 roadLabels.addEventListener('click', (event) => {
+  const mappedTarget = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-mapped]')
+  if (mappedTarget && placeCatalog) {
+    const id = mappedTarget.dataset.mapped ?? ''
+    const business = mappedById.get(id)
+    const building = placeCatalog.buildings.find((item) => item.id === (business?.anchorId ?? id))
+    if (!building) return
+    placeCard.innerHTML = '<button type="button" class="nj-card-close" aria-label="Close place details">×</button><span class="nj-card-eyebrow"></span><h2></h2><p class="nj-card-address"></p><p class="nj-card-meta"></p><small></small>'
+    placeCard.querySelector('.nj-card-eyebrow')!.textContent = `${mappedKind.toUpperCase()} · SOURCE MATCH`
+    placeCard.querySelector('h2')!.textContent = business?.label ?? building.name
+    placeCard.querySelector<HTMLElement>('.nj-card-address')!.textContent = building.address
+    placeCard.querySelector<HTMLElement>('.nj-card-meta')!.textContent = business
+      ? `${business.source} · ${business.sourceId} · ${business.match}`
+      : `${building.unitsRes} residential units · ${building.officeAreaSqFt.toLocaleString()} office sq ft`
+    placeCard.querySelector('small')!.textContent = 'Mapped to this 3D building approximately. NPC homes and jobs are simulated; these are not real residents or employees.'
+    placeCard.hidden = false
+    placeCard.querySelector<HTMLButtonElement>('button')!.addEventListener('click', () => { placeCard.hidden = true })
+    return
+  }
   const landmarkTarget = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-landmark]')
   if (landmarkTarget) {
     const id = landmarkTarget.dataset.landmark ?? ''
@@ -1193,6 +1244,13 @@ async function loadWorld() {
       const roadResponse = await fetch(`${assetBase}${manifest.roadNetwork}`)
       if (roadResponse.ok) roadNetwork = await roadResponse.json() as RoadNetwork
     }
+    try {
+      const catalogResponse = await fetch(`${assetBase}place-catalog.json`)
+      if (catalogResponse.ok) {
+        placeCatalog = await catalogResponse.json() as PlaceCatalog
+        for (const item of placeCatalog.places) mappedById.set(item.id, item)
+      }
+    } catch (error) { console.warn('Mapped places are unavailable:', error) }
     if (roadNetwork?.zones.city?.roads.length) {
       flyoverModel = buildBridgeFlyovers(roadNetwork.zones.city.roads,
         manifest.bridgeRise ?? 5, manifest.tileBlocks, manifest.brooklynBridge)
@@ -1231,6 +1289,24 @@ async function loadWorld() {
       jumpToLandmark(stationPicker.value)
     })
     zoneSwitch.append(stationPicker)
+    if (placeCatalog) {
+      const placePicker = document.createElement('select')
+      placePicker.className = 'nj-station-picker nj-place-picker'
+      placePicker.setAttribute('aria-label', 'Show mapped New York places')
+      const kinds = ['home', 'office', 'cafe', 'grocery', 'restaurant', 'retail', 'school', 'clinic', 'library', 'community']
+      const kindNames: Record<string, string> = { home: 'HOMES', office: 'OFFICES', cafe: 'CAFES',
+        grocery: 'GROCERIES', restaurant: 'RESTAURANTS', retail: 'RETAIL', school: 'SCHOOLS',
+        clinic: 'CLINICS', library: 'LIBRARIES', community: 'COMMUNITY' }
+      placePicker.innerHTML = '<option value="">MAP PLACES</option>' + kinds.map((kind) =>
+        `<option value="${kind}">${kindNames[kind]}</option>`).join('')
+      placePicker.addEventListener('change', () => {
+        mappedKind = placePicker.value
+        placeCard.hidden = true
+        lastLabelUpdate = 0
+        dirty = true
+      })
+      zoneSwitch.append(placePicker)
+    }
     if (skyline?.towers.length) {
       const towerPicker = document.createElement('select')
       towerPicker.className = 'nj-station-picker nj-tower-picker'
