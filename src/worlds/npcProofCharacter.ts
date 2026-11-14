@@ -19,7 +19,8 @@ type NodeState = { object: THREE.Object3D; base: Pose }
 type ActionDef = { clip: string; speed: number; pingPong?: boolean; upperBodyOnly?: boolean }
 
 const assetBase = `${import.meta.env.BASE_URL}assets/clockwork/`
-const BODY_HEIGHT = m(1.75)
+// One city block is a 3 m building floor; NPCs should stand about half a floor tall.
+const BODY_HEIGHT = m(1.5)
 const FBX_UNITS_PER_METER = 100
 const FADE_SECONDS = 0.2
 const DEG = Math.PI / 180
