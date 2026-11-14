@@ -48,6 +48,7 @@ type RoadNetwork = { zones: Record<string, { nodes: RoadNode[]; roads: Road[]; b
 type MappedBuilding = { id: string; name: string; address: string; x: number; z: number; uses: string[]; unitsRes: number; officeAreaSqFt: number; sources: { dataset: string; id: string; match?: string }[] }
 type MappedPlace = { id: string; anchorId: string; kind: string; label: string; source: string; sourceId: string; match: string; distanceM: number | null }
 type PlaceCatalog = { buildings: MappedBuilding[]; places: MappedPlace[]; sources: Record<string, string> }
+type NpcOccupancy = { summary: { members: number; households: number }; anchors: Record<string, { residents: number; workers: number; students: number }> }
 const DETAIL_VIEW_HEIGHT = 55
 
 const app = document.querySelector<HTMLDivElement>('#app')!
@@ -114,6 +115,7 @@ const transitKey = app.querySelector<HTMLElement>('#nj-transit-key')!
 const placeCard = app.querySelector<HTMLElement>('#nj-place-card')!
 const assetBase = `${import.meta.env.BASE_URL}assets/nju-jork/`
 let placeCatalog: PlaceCatalog | null = null
+let npcOccupancy: NpcOccupancy | null = null
 let mappedKind = ''
 const mappedById = new Map<string, MappedPlace>()
 
@@ -522,7 +524,9 @@ function updateMapLabels(now: number) {
       marker.className = 'nj-mapped-marker'
       marker.dataset.mapped = item.id
       marker.dataset.z = String(item.z)
-      marker.textContent = item.label
+      const counts = npcOccupancy?.anchors[item.building.id]
+      const count = mappedKind === 'home' ? counts?.residents : mappedKind === 'office' ? counts?.workers : 0
+      marker.textContent = count ? `${item.label} · ${count} NPCs` : item.label
       marker.title = `${mappedKind.replace('_', ' ')} · ${item.label}`
       if (place(marker, item.x, Math.max(2, item.building ? (activeBuildings.find((building) => building.id === item.building.id)?.roofY ?? manifest.baseY) - manifest.baseY + .6 : 2), 125, 34)) shown++
     }
@@ -583,6 +587,9 @@ roadLabels.addEventListener('click', (event) => {
     placeCard.querySelector<HTMLElement>('.nj-card-meta')!.textContent = business
       ? `${business.source} · ${business.sourceId} · ${business.match}`
       : `${building.unitsRes} residential units · ${building.officeAreaSqFt.toLocaleString()} office sq ft`
+    const counts = npcOccupancy?.anchors[building.id]
+    if (counts) placeCard.querySelector<HTMLElement>('.nj-card-meta')!.textContent +=
+      ` · ${counts.residents} simulated residents · ${counts.workers} simulated workers · ${counts.students} simulated students`
     placeCard.querySelector('small')!.textContent = 'Mapped to this 3D building approximately. NPC homes and jobs are simulated; these are not real residents or employees.'
     placeCard.hidden = false
     placeCard.querySelector<HTMLButtonElement>('button')!.addEventListener('click', () => { placeCard.hidden = true })
@@ -1249,6 +1256,11 @@ async function loadWorld() {
       if (catalogResponse.ok) {
         placeCatalog = await catalogResponse.json() as PlaceCatalog
         for (const item of placeCatalog.places) mappedById.set(item.id, item)
+        const occupancyResponse = await fetch(`${assetBase}npc-place-occupancy.json`)
+        if (occupancyResponse.ok) {
+          const occupancy = await occupancyResponse.json() as NpcOccupancy
+          if (occupancy.summary.members === 100000) npcOccupancy = occupancy
+        }
       }
     } catch (error) { console.warn('Mapped places are unavailable:', error) }
     if (roadNetwork?.zones.city?.roads.length) {

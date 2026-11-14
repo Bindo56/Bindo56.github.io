@@ -26,6 +26,8 @@ Updated 2026-11-14. Scope: the **current 3D map in partial Manhattan**, not all 
 
 The city view has a **MAP PLACES** picker for these categories plus residential and office buildings. Markers show source and approximate match information. The map renders nearby markers to avoid covering the whole city with 11,315 labels. The catalog retains every matched record for search and future map views.
 
+`public/assets/nju-jork/npc-place-occupancy.json` publishes **aggregate fictional NPC counts per building** for the live map: 100,000 cohort members in 39,827 households, including 61,963 workers and 15,596 students. Home and office markers and cards show these simulation counts. The file contains no individual NPC records.
+
 ## NPC home, work, and visit assignments
 
 The local SQLite cohort key is `nju-jork-100k-v1`. `scripts/apply-nyc-place-catalog.mjs` maps **39,827 cohort households** to residential candidates while keeping cohort household members together. It assigns workers and students to mapped office, retail, grocery, restaurant, cafe, clinic, library, community, or school places based on their synthetic occupation. Regular cafe, grocery, and leisure locations are remapped to public-source places. Assignment distances and capacities are simulation estimates; they are not observed occupancy, employment, or commuting data.
@@ -50,6 +52,7 @@ node scripts/fetch-nyc-place-sources.mjs
 node scripts/build-nyc-place-catalog.mjs
 npm run population:backup
 node scripts/apply-nyc-place-catalog.mjs
+node scripts/export-npc-place-occupancy.mjs
 npm run population:week:check -- --week=2026-11-09 --samples=500
 npm run population:week:check -- --week=2026-11-16 --samples=500
 ```
@@ -66,4 +69,4 @@ The Vite development server exposes bounded read endpoints:
 | `/api/npc-week/npc/:id/week?start=2026-11-16` | Seven-day timeline |
 | `/api/npc-week/npc/:id/relationships` | Relationship edges |
 
-The development API reads the local SQLite database. The public JSON catalog can load in the static 3D map without that database. A deployed static site does not publish the million-person database or provide the NPC week API.
+The development API reads the local SQLite database. The public catalog and aggregated NPC building counts load in the static 3D map without that database. A deployed static site does not publish the million-person database or provide the NPC week API.

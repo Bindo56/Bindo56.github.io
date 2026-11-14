@@ -21,7 +21,8 @@
     "population:week:check": "node scripts/npc-weekly.mjs check",
     "population:places:fetch": "node scripts/fetch-nyc-place-sources.mjs",
     "population:places:build": "node scripts/build-nyc-place-catalog.mjs",
-    "population:places:apply": "node scripts/apply-nyc-place-catalog.mjs"
+    "population:places:apply": "node scripts/apply-nyc-place-catalog.mjs",
+    "population:places:export": "node scripts/export-npc-place-occupancy.mjs"
   },
   "dependencies": {
     "three": "^0.186.0",
