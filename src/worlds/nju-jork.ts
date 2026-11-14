@@ -526,7 +526,7 @@ function updateMapLabels(now: number) {
       marker.dataset.z = String(item.z)
       const counts = npcOccupancy?.anchors[item.building.id]
       const count = mappedKind === 'home' ? counts?.residents : mappedKind === 'office' ? counts?.workers : 0
-      marker.textContent = count ? `${item.label} · ${count} NPCs` : item.label
+      marker.textContent = count ? `${count} ${mappedKind === 'home' ? 'residents' : 'workers'} · ${item.label}` : item.label
       marker.title = `${mappedKind.replace('_', ' ')} · ${item.label}`
       if (place(marker, item.x, Math.max(2, item.building ? (activeBuildings.find((building) => building.id === item.building.id)?.roofY ?? manifest.baseY) - manifest.baseY + .6 : 2), 125, 34)) shown++
     }
