@@ -22,7 +22,8 @@
     "population:places:fetch": "node scripts/fetch-nyc-place-sources.mjs",
     "population:places:build": "node scripts/build-nyc-place-catalog.mjs",
     "population:places:apply": "node scripts/apply-nyc-place-catalog.mjs",
-    "population:places:export": "node scripts/export-npc-place-occupancy.mjs"
+    "population:places:export": "node scripts/export-npc-place-occupancy.mjs",
+    "population:browser:export": "node scripts/export-browser-npc-data.mjs"
   },
   "dependencies": {
     "three": "^0.186.0",

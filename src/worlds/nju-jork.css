@@ -113,6 +113,31 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-help { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 13px; padding: 10px 20px; color: #bed0c5; background: rgba(9, 25, 29, .91); border-top: 1px solid rgba(225, 191, 144, .24); font-size: 10px; font-weight: 700; letter-spacing: .11em; text-align: center; }
 .nj-help b { color: #e6bf86; }
 .nj-loading { position: absolute; z-index: 5; inset: 60px 0 48px; display: flex; align-items: center; justify-content: center; color: #efca95; background: rgba(11, 31, 35, .95); font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 23px; font-weight: 700; letter-spacing: .13em; }
+.nj-controls .nj-population-button { width: 104px; align-self: flex-end; padding: 0 6px; color: #10242a; background: #edc78f; border-color: #fff3d7; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+.nj-controls .nj-population-button:hover { background: #fff3d7; }
+.nj-population-panel { position: absolute; z-index: 6; top: 86px; right: clamp(130px, 11vw, 170px); bottom: 68px; width: min(390px, calc(100vw - 155px)); padding: 19px; overflow-y: auto; color: #f4eee2; background: rgba(10, 29, 34, .98); border: 1px solid #d6ad75; box-shadow: 0 20px 50px rgba(3, 15, 17, .55); scrollbar-width: thin; }
+.nj-population-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.nj-population-heading h2, .nj-population-loading h2 { margin: 7px 0 12px; color: #f5dfbb; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 35px; line-height: 1; }
+.nj-population-close { flex: none; width: 44px; height: 44px; color: #f4eee2; background: #17333a; border: 1px solid #bf9d70; font-size: 25px; }
+.nj-population-status, .nj-population-note { margin: 0 0 10px; color: #d1dfd5; font-size: 12px; line-height: 1.5; }
+.nj-population-progress, .nj-population-loading progress { display: block; width: 100%; height: 10px; accent-color: #edc78f; }
+.nj-population-count { margin: 7px 0 18px; color: #edc78f; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.nj-population-panel h3 { margin: 17px 0 7px; color: #f5dfbb; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 23px; }
+.nj-population-retry { width: 100%; min-height: 44px; color: #10242a; background: #edc78f; border: 0; font-size: 11px; font-weight: 800; }
+.nj-population-list { display: grid; gap: 7px; font-size: 12px; }
+.nj-population-person { display: grid; gap: 4px; width: 100%; min-height: 68px; padding: 10px 12px; color: #f4eee2; background: #17333a; border: 1px solid rgba(226, 185, 126, .45); text-align: left; }
+.nj-population-person:hover, .nj-population-person:focus-visible { background: #285057; border-color: #efc88f; }
+.nj-population-person strong { color: #f5dfbb; font-size: 13px; }
+.nj-population-person span { line-height: 1.35; }
+.nj-population-person small { color: #a8c8bb; font-size: 10px; }
+.nj-population-detail { margin-top: 16px; padding: 12px; background: #10272c; border: 1px solid #789389; }
+.nj-population-detail h3 { margin-top: 0; }
+.nj-population-detail p, .nj-population-detail li { margin: 5px 0; color: #d1dfd5; font-size: 11px; line-height: 1.45; }
+.nj-population-detail ol { max-height: 145px; overflow-y: auto; padding-left: 22px; }
+.nj-population-loading { position: absolute; z-index: 6; inset: 60px 0 48px; display: grid; place-items: center; padding: 20px; background: rgba(8, 25, 30, .91); backdrop-filter: blur(8px); }
+.nj-population-loading-card { width: min(420px, 100%); padding: 28px; color: #f4eee2; background: #102c32; border: 1px solid #d6ad75; box-shadow: 0 22px 60px rgba(3, 15, 17, .55); }
+.nj-population-loading-card p { margin: 0 0 18px; color: #d1dfd5; font-size: 13px; }
+.nj-population-loading-card small { display: block; margin-top: 9px; color: #edc78f; font-size: 11px; font-weight: 800; }
 
 @media (max-width: 700px) {
   .nj-topbar { min-height: 53px; padding: 0 12px; gap: 8px; }
@@ -149,6 +174,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
   #nj-view-mode { grid-column: 1 / -1; justify-self: end; min-height: 24px; padding: 0 7px; font-size: 8px; }
   .nj-help { min-height: 58px; flex-wrap: wrap; gap: 2px 7px; padding: 8px 12px; font-size: 9px; line-height: 1.3; letter-spacing: .06em; }
   .nj-loading { top: 53px; bottom: 58px; }
+  .nj-controls .nj-population-button { width: 82px; font-size: 9px; }
+  .nj-population-panel { top: 59px; right: 99px; bottom: 64px; width: min(355px, calc(100vw - 108px)); padding: 14px; }
+  .nj-population-loading { top: 53px; bottom: 58px; }
 }
 @media (max-width: 700px) and (max-height: 500px) {
   .nj-intro p { display: none; }

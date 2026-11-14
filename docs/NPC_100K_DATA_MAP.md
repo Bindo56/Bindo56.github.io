@@ -69,4 +69,12 @@ The Vite development server exposes bounded read endpoints:
 | `/api/npc-week/npc/:id/week?start=2026-11-16` | Seven-day timeline |
 | `/api/npc-week/npc/:id/relationships` | Relationship edges |
 
-The development API reads the local SQLite database. The public catalog and aggregated NPC building counts load in the static 3D map without that database. A deployed static site does not publish the million-person database or provide the NPC week API.
+The development API reads the local SQLite database. The deployed static site does not publish that database or expose this API.
+
+## Browser-hosted 100,000 NPC simulation
+
+`npm run population:browser:export` creates the static browser dataset in `public/assets/nju-jork/npc-data/` from the mapped SQLite cohort. The exporter checks that the local place assignments match the published place catalog. The output contains 100,000 synthetic NPC profiles, their assigned home/work/visit places, 99,020 planned meetings across the two seeded weeks, and 300,036 relationship edges. It is split into **33 spatial shards** by home location, plus place and relationship files. `manifest.json` records counts, SHA-256 checksums, and a dataset ID for cache invalidation. The local SQLite database stays private.
+
+The current output is **94.85 MB of JSON** (90.45 MiB) or **11.1 MB with gzip** (10.59 MiB). Those are data sizes, excluding the existing 3D model and other site assets. Actual network transfer depends on the host's compression and browser cache. The first area near the camera loads before the rest; the loading scene then closes while the remaining shards download in the background. A progress bar and the NPC panel show how many profiles have loaded. The browser stores verified files in IndexedDB for later visits, keeping only three nearby shards decoded in worker memory.
+
+The browser Web Worker uses the same deterministic weekly plan generator as the SQLite development API. It generates an NPC's current activity and seven-day plan when needed, so the site does not download expanded tasks for all 100,000 people. The **NPCs** panel shows people assigned near the camera and lets visitors inspect their current task, next task, and today's schedule. Location is the episode's assigned place; walking routes and individual on-screen 3D bodies for this full cohort are not simulated here. Population progress and plans are independent for each visitor's computer; there is no shared world state or server-side persistence.

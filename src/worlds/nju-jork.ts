@@ -14,6 +14,7 @@ import { buildStreetAds, disposeStreetAds } from './skyline/streetAds'
 import { buildTimesSquare, TIMES_SQUARE, type TimesSquareScene } from './skyline/timesSquare'
 import { TimeManager } from './TimeManager'
 import { NpcProof } from './npcProof'
+import { NpcPopulation } from './npcPopulation'
 import './nju-jork.css'
 
 type Zone = {
@@ -114,6 +115,8 @@ const labelButton = app.querySelector<HTMLButtonElement>('#nj-labels')!
 const transitKey = app.querySelector<HTMLElement>('#nj-transit-key')!
 const placeCard = app.querySelector<HTMLElement>('#nj-place-card')!
 const assetBase = `${import.meta.env.BASE_URL}assets/nju-jork/`
+const npcPopulation = new NpcPopulation(app, `${assetBase}npc-data/`)
+if (import.meta.hot) import.meta.hot.dispose(() => npcPopulation.dispose())
 let placeCatalog: PlaceCatalog | null = null
 let npcOccupancy: NpcOccupancy | null = null
 let mappedKind = ''
@@ -719,6 +722,7 @@ async function activateZone(next: Zone) {
     scene.add(overview)
     loading.hidden = true
     canvasStatus.innerHTML = '<i></i> CITY READY'
+    if (epoch === 1) npcPopulation.start(focus.x, focus.z)
     lastTileCheck = 0
     dirty = true
   } catch (error) {
@@ -1159,6 +1163,7 @@ function frame(now: number) {
   const moving = focus.distanceToSquared(targetFocus) > .05 || Math.abs(viewHeight - targetViewHeight) > .05
   if (moving || dirty) updateCamera()
   const proofChanged = npcProof.update(dt, viewHeight, focus)
+  npcPopulation.update(focus.x, focus.z, viewHeight, now)
   refreshTiles(now)
   if (brooklynModel) {
     const visible = zone?.id === 'city' && viewHeight < 850 && loadedTiles.has(brooklynTile)
