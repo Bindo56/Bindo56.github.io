@@ -1180,7 +1180,7 @@ function frame(now: number) {
   const moving = focus.distanceToSquared(targetFocus) > .05 || Math.abs(viewHeight - targetViewHeight) > .05
   if (moving || dirty) updateCamera()
   const proofChanged = npcProof.update(dt, viewHeight, focus)
-  const populationChanged = npcPopulationFigures.update(viewHeight, focus)
+  const populationChanged = npcPopulationFigures.update(dt, viewHeight, focus)
   npcPopulation.update(focus.x, focus.z, viewHeight, now)
   refreshTiles(now)
   if (brooklynModel) {

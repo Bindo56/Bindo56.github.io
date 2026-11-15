@@ -9,6 +9,7 @@ export type NearbyNpc = {
   npcId: number
   name: string
   role: string
+  appearanceSeed: number
   activity: string
   placeId: string
   placeLabel: string

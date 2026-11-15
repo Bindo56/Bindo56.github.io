@@ -7,6 +7,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } })
 const errors = []
 page.on('pageerror', (error) => errors.push(error.message))
 page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()) })
+const fbxResponse = page.waitForResponse((response) => response.url().endsWith('/100-people.fbx') && response.ok(), { timeout: 60000 })
 await page.goto('http://127.0.0.1:4173/worlds/clockwork-city/', { waitUntil: 'domcontentloaded' })
 await page.locator('.nj-population-loading').waitFor({ state: 'hidden', timeout: 60000 })
 await page.locator('.nj-population-button').click()
@@ -14,6 +15,8 @@ await page.locator('.nj-population-person').first().waitFor({ timeout: 60000 })
 await page.locator('.nj-population-person').first().click()
 await page.locator('.nj-population-detail h3').waitFor({ timeout: 60000 })
 await page.waitForFunction(() => document.querySelector('.nj-population-status')?.textContent?.includes('profiles and'), null, { timeout: 120000 })
+const fbx = await fbxResponse
+await fbx.finished()
 await page.locator('.nj-population-view').click()
 await page.waitForFunction(() => document.querySelector('#nj-view-mode')?.textContent === 'STREET VIEW', null, { timeout: 10000 })
 await page.waitForTimeout(1500)
@@ -30,6 +33,7 @@ console.log(JSON.stringify({
   person: await page.locator('.nj-population-detail h3').textContent(),
   task: await page.locator('.nj-population-detail p').nth(1).textContent(),
   loaded: await page.locator('.nj-population-progress').evaluate((element) => element.value),
+  characterPack: fbx.status(),
   mobilePanel: panel,
   errors,
 }, null, 2))

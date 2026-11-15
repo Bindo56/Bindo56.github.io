@@ -52,7 +52,7 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Figures stand by their assigned place and are about 1.8 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
+      <h3>Near the camera</h3><p class="nj-population-note">Characters from the 100 People pack stand near their assigned place at about 1.5 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
       <div class="nj-population-detail" hidden></div>`
     root.querySelector('.nj-ui')!.append(this.panel)

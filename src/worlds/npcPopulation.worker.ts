@@ -243,6 +243,7 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
       const distance = Math.hypot(place.x - message.x, place.z - message.z)
       if (distance > message.radius) continue
       people.push({ npcId: member.npc_id, name: member.display_name, role: member.role,
+        appearanceSeed: member.appearance_seed,
         activity: state.current.activity, placeId: place.id, placeLabel: place.label,
         x: place.x, z: place.z, distance })
     }
