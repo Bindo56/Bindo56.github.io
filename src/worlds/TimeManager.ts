@@ -1,7 +1,9 @@
+import { localClockAsNewYorkEpoch } from './npcClock'
+
 const TIME_URL = 'https://gettimeapi.dev/v1/time?timezone=UTC'
 const SYNC_INTERVAL_MS = 5 * 60 * 1000
 
-type TimeSource = 'pc' | 'network' | 'preview'
+type TimeSource = 'local' | 'pc' | 'network' | 'preview'
 
 const PREVIEW_SPEED = 20
 
@@ -33,12 +35,13 @@ export class TimeManager {
   private readonly date = document.createElement('p')
   private readonly zone = document.createElement('p')
   private readonly status = document.createElement('p')
+  private readonly localButton = document.createElement('button')
   private readonly pcButton = document.createElement('button')
   private readonly networkButton = document.createElement('button')
   private readonly previewButton = document.createElement('button')
   private readonly refreshButton = document.createElement('button')
   private readonly timer: number
-  private source: TimeSource = 'pc'
+  private source: TimeSource = 'local'
   private networkEpoch = 0
   private networkAnchor = 0
   private previewEpoch = 0
@@ -65,7 +68,7 @@ export class TimeManager {
     heading.textContent = 'Time Manager'
     const intro = document.createElement('p')
     intro.className = 'nj-time-intro'
-    intro.textContent = 'Use the live clock or preview a New York morning commute on this device.'
+    intro.textContent = 'NPCs follow your local date and time by default. Switch to real New York time or preview a commute.'
     this.clock.className = 'nj-time-clock'
     this.clock.setAttribute('aria-label', 'Current time')
     this.date.className = 'nj-time-date'
@@ -75,13 +78,16 @@ export class TimeManager {
     sources.className = 'nj-time-sources'
     sources.setAttribute('role', 'group')
     sources.setAttribute('aria-label', 'Time source')
+    this.localButton.type = 'button'
+    this.localButton.textContent = 'My local time'
+    this.localButton.addEventListener('click', () => this.useLocal())
     this.pcButton.type = 'button'
-    this.pcButton.textContent = 'PC time'
+    this.pcButton.textContent = 'Real New York time'
     this.pcButton.addEventListener('click', () => this.usePc())
     this.networkButton.type = 'button'
-    this.networkButton.textContent = 'Internet time'
+    this.networkButton.textContent = 'Sync internet time'
     this.networkButton.addEventListener('click', () => void this.syncNetwork())
-    sources.append(this.pcButton, this.networkButton)
+    sources.append(this.localButton, this.pcButton, this.networkButton)
     this.previewButton.type = 'button'
     this.previewButton.className = 'nj-time-preview'
     this.previewButton.textContent = 'Preview morning commute · 20×'
@@ -93,7 +99,7 @@ export class TimeManager {
     this.refreshButton.addEventListener('click', () => void this.syncNetwork())
     this.status.className = 'nj-time-status'
     this.status.setAttribute('role', 'status')
-    this.status.textContent = 'Reading time from this PC.'
+    this.status.textContent = 'NPC schedules follow your local date and time.'
     this.panel.append(heading, intro, this.clock, this.date, this.zone, sources, this.previewButton,
       this.refreshButton, this.status)
     this.root.append(this.toggle, this.panel)
@@ -123,6 +129,7 @@ export class TimeManager {
   }
 
   nowMs(): number {
+    if (this.source === 'local') return localClockAsNewYorkEpoch(Date.now())
     if (this.source === 'preview') return Math.round(this.previewEpoch +
       (performance.now() - this.previewAnchor) * PREVIEW_SPEED)
     return this.source === 'pc' ? Date.now() :
@@ -146,7 +153,19 @@ export class TimeManager {
     this.networkButton.disabled = false
     this.refreshButton.disabled = false
     this.source = 'pc'
-    this.status.textContent = 'Reading time from this PC.'
+    this.status.textContent = 'NPC schedules follow the current time in New York.'
+    this.render()
+    this.onTimeChange()
+  }
+
+  private useLocal(): void {
+    this.request?.abort()
+    this.request = null
+    this.syncing = false
+    this.networkButton.disabled = false
+    this.refreshButton.disabled = false
+    this.source = 'local'
+    this.status.textContent = 'NPC schedules follow your local date and time.'
     this.render()
     this.onTimeChange()
   }
@@ -197,7 +216,7 @@ export class TimeManager {
       if (this.request !== request) return
       this.status.textContent = this.source === 'network'
         ? 'Could not refresh. Showing last synced time; try again.'
-        : 'Internet unavailable. Showing PC time; try again.'
+        : 'Internet unavailable. Your selected clock is still active.'
     } finally {
       window.clearTimeout(timeout)
       if (this.request === request) {
@@ -210,21 +229,24 @@ export class TimeManager {
   }
 
   private render(): void {
-    const epoch = this.nowMs()
+    const epoch = this.source === 'local' ? Date.now() : this.nowMs()
     const now = new Date(epoch)
-    const timeZone = this.source === 'preview' ? 'America/New_York' : undefined
+    const timeZone = this.source === 'local' ? undefined : 'America/New_York'
     const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit',
       timeZone }).format(now)
     this.toggle.textContent = time
     this.toggle.dataset.source = this.source
-    this.toggle.title = `Time Manager · ${this.source === 'pc' ? 'PC time' :
-      this.source === 'network' ? 'Internet time' : 'New York commute preview'}`
+    this.toggle.title = `Time Manager · ${this.source === 'local' ? 'Your local time' :
+      this.source === 'pc' ? 'Real New York time' :
+      this.source === 'network' ? 'Internet-synced New York time' : 'New York commute preview'}`
     this.clock.textContent = time
     this.clock.dateTime = now.toISOString()
     this.date.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', year: 'numeric',
       month: 'long', day: 'numeric', timeZone }).format(now)
     this.zone.textContent = this.source === 'preview' ? 'New York time · 20× playback' :
-      `Your PC time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time'}`
+      this.source === 'local' ? `NPC local schedule · ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'Device time zone'}` :
+      'Actual New York time'
+    this.localButton.setAttribute('aria-pressed', String(this.source === 'local'))
     this.pcButton.setAttribute('aria-pressed', String(this.source === 'pc'))
     this.networkButton.setAttribute('aria-pressed', String(this.source === 'network'))
     this.previewButton.setAttribute('aria-pressed', String(this.source === 'preview'))
