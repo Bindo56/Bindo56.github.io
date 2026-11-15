@@ -1,8 +1,9 @@
 import type { NpcWeek } from '../../server/population/weekly-core.mjs'
+import type { NpcMovement } from './npcMovement'
 
 export type PopulationRequest =
   | { type: 'init'; baseUrl: string; x: number; z: number }
-  | { type: 'nearby'; requestId: number; x: number; z: number; radius: number; limit: number; timeMs: number }
+  | { type: 'nearby'; requestId: number; x: number; z: number; radius: number; limit: number; timeMs: number; followId?: number }
   | { type: 'inspect'; requestId: number; npcId: number; timeMs: number }
 
 export type NearbyNpc = {
@@ -16,6 +17,7 @@ export type NearbyNpc = {
   x: number
   z: number
   distance: number
+  movement: NpcMovement | null
 }
 
 export type InspectedNpc = {
@@ -26,6 +28,8 @@ export type InspectedNpc = {
   current: NpcWeek['days'][number]['episodes'][number]
   next: NpcWeek['days'][number]['episodes'][number]
   currentPlace: string
+  movement: NpcMovement | null
+  assignments: { home: string; work: string | null; cafe: string; errand: string; leisure: string }
   week: NpcWeek
 }
 

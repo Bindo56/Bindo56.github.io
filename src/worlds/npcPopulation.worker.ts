@@ -1,6 +1,7 @@
-import { generateWeek, newYorkLocalTime, planSeedForWeek } from '../../server/population/weekly-core.mjs'
-import type { NpcMeeting, NpcMember, NpcWeek } from '../../server/population/weekly-core.mjs'
+import { fillDay, generateWeek, newYorkLocalTime, overlayMeeting, planSeedForWeek } from '../../server/population/weekly-core.mjs'
+import type { NpcEpisode, NpcMeeting, NpcMember, NpcWeek } from '../../server/population/weekly-core.mjs'
 import type { NearbyNpc, PopulationRequest, PopulationResponse } from './npcPopulationProtocol'
+import { movementFor } from './npcMovement'
 
 type FileSpec = { file: string; bytes: number; gzipBytes: number; hash: string }
 type ShardSpec = FileSpec & { id: string; cx: number; cz: number; count: number }
@@ -19,10 +20,12 @@ let cachePromise: Promise<IDBDatabase | null> | null = null
 const inFlight = new Map<string, Promise<unknown>>()
 const downloaded = new Set<string>()
 const active = new Map<string, StoredMember[]>()
+const daily = new Map<number, { localDate: string; episodes: NpcEpisode[] }>()
 const memberToShard = new Map<number, string>()
 const places = new Map<string, Place>()
 let loadedMembers = 0
 let ready = false
+let selectedMember: StoredMember | null = null
 
 function send(message: PopulationResponse): void { self.postMessage(message) }
 
@@ -161,7 +164,11 @@ async function loadShard(spec: ShardSpec, keepActive: boolean): Promise<void> {
   if (keepActive) {
     active.delete(spec.id)
     active.set(spec.id, payload.members)
-    while (active.size > MAX_ACTIVE_SHARDS) active.delete(active.keys().next().value!)
+    while (active.size > MAX_ACTIVE_SHARDS) {
+      const oldest = active.keys().next().value!
+      for (const member of active.get(oldest)!) daily.delete(member.npc_id)
+      active.delete(oldest)
+    }
   }
 }
 
@@ -189,8 +196,32 @@ function currentFor(member: StoredMember, timeMs: number) {
   const week = weekFor(member, local.weekStart)
   const day = week.days.find((item) => item.localDate === local.localDate)!
   const index = day.episodes.findIndex((item) => item.startMinute <= local.minute && local.minute < item.endMinute)
+  const minute = local.minute + (timeMs % 60000) / 60000
+  const movement = movementFor(day.episodes, index, minute, timeMs, (id) => places.get(id))
   return { local, week, current: day.episodes[index],
-    next: day.episodes[index + 1] ?? week.days[(day.weekday + 1) % 7].episodes[0] }
+    next: day.episodes[index + 1] ?? week.days[(day.weekday + 1) % 7].episodes[0], movement }
+}
+
+function dailyState(member: StoredMember, local: ReturnType<typeof newYorkLocalTime>, timeMs: number) {
+  let cached = daily.get(member.npc_id)
+  if (!cached || cached.localDate !== local.localDate) {
+    const weekday = Math.round((Date.parse(`${local.localDate}T00:00:00Z`)
+      - Date.parse(`${local.weekStart}T00:00:00Z`)) / 86400000)
+    const seed = local.weekStart === manifest!.firstWeek
+      ? member.plan_seed : planSeedForWeek(member.plan_seed, local.weekStart)
+    let episodes = fillDay({ ...member, plan_seed: seed }, weekday)
+    for (const item of member.meetings) if (item[1] === local.weekStart && item[5] === weekday) {
+      episodes = overlayMeeting(episodes, { id: item[0], week_start: item[1], npc_a_id: item[2],
+        npc_b_id: item[3], place_id: item[4], weekday: item[5], start_minute: item[6],
+        duration_minute: item[7], status: item[8], viewer_id: member.npc_id })
+    }
+    cached = { localDate: local.localDate, episodes }
+    daily.set(member.npc_id, cached)
+  }
+  const index = cached.episodes.findIndex((item) => item.startMinute <= local.minute && local.minute < item.endMinute)
+  const current = cached.episodes[index]
+  const minute = local.minute + (timeMs % 60000) / 60000
+  return { current, movement: movementFor(cached.episodes, index, minute, timeMs, (id) => places.get(id)) }
 }
 
 async function initialize(message: Extract<PopulationRequest, { type: 'init' }>): Promise<void> {
@@ -227,28 +258,39 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
   if (!manifest || !ready) return
   try {
     for (const shard of orderedShards(message.x, message.z).slice(0, MAX_ACTIVE_SHARDS)) await loadShard(shard, true)
-    const candidates = [...active.values()].flat().map((member) => {
-      const home = places.get(member.home_place_id)
-      const work = member.work_place_id ? places.get(member.work_place_id) : null
-      const homeDistance = home ? Math.hypot(home.x - message.x, home.z - message.z) : Infinity
-      const workDistance = work ? Math.hypot(work.x - message.x, work.z - message.z) : Infinity
-      return { member, distance: Math.min(homeDistance, workDistance) }
-    }).sort((a, b) => a.distance - b.distance || a.member.npc_id - b.member.npc_id)
-      .slice(0, Math.max(message.limit * 12, 80))
+    const local = newYorkLocalTime(message.timeMs)
     const people: NearbyNpc[] = []
-    for (const { member } of candidates) {
-      const state = currentFor(member, message.timeMs)
+    const personAt = (member: StoredMember, allowOutside: boolean): NearbyNpc | null => {
+      const state = dailyState(member, local, message.timeMs)
       const place = places.get(state.current.placeId)
-      if (!place) continue
-      const distance = Math.hypot(place.x - message.x, place.z - message.z)
-      if (distance > message.radius) continue
-      people.push({ npcId: member.npc_id, name: member.display_name, role: member.role,
+      if (!place) return null
+      const x = state.movement
+        ? state.movement.from.x + (state.movement.to.x - state.movement.from.x) * state.movement.progress : place.x
+      const z = state.movement
+        ? state.movement.from.z + (state.movement.to.z - state.movement.from.z) * state.movement.progress : place.z
+      const distance = Math.hypot(x - message.x, z - message.z)
+      if (!allowOutside && distance > message.radius) return null
+      return { npcId: member.npc_id, name: member.display_name, role: member.role,
         appearanceSeed: member.appearance_seed,
-        activity: state.current.activity, placeId: place.id, placeLabel: place.label,
-        x: place.x, z: place.z, distance })
+        activity: state.movement ? `walking to ${state.movement.to.label}` : state.current.activity,
+        placeId: place.id, placeLabel: place.label, movement: state.movement,
+        x, z, distance }
+    }
+    for (const rows of active.values()) for (const member of rows) {
+      const person = personAt(member, false)
+      if (person) people.push(person)
     }
     people.sort((a, b) => a.distance - b.distance || a.npcId - b.npcId)
-    send({ type: 'nearby', requestId: message.requestId, people: people.slice(0, message.limit) })
+    const visible = people.slice(0, message.limit)
+    if (message.followId && !visible.some((person) => person.npcId === message.followId)) {
+      const member = selectedMember?.npc_id === message.followId ? selectedMember : memberById(message.followId)
+      const selected = member ? personAt(member, true) : null
+      if (selected) {
+        if (visible.length >= message.limit) visible.pop()
+        visible.push(selected)
+      }
+    }
+    send({ type: 'nearby', requestId: message.requestId, people: visible })
   } catch (error) {
     send({ type: 'error', message: error instanceof Error ? error.message : String(error), initial: false })
   }
@@ -264,10 +306,17 @@ async function inspect(message: Extract<PopulationRequest, { type: 'inspect' }>)
       if (shard) { await loadShard(shard, true); member = memberById(message.npcId) }
     }
     if (!member) { send({ type: 'inspect', requestId: message.requestId, result: null }); return }
+    selectedMember = member
     const state = currentFor(member, message.timeMs)
+    const label = (id: string) => places.get(id)?.label ?? id
     send({ type: 'inspect', requestId: message.requestId, result: {
       npcId: member.npc_id, name: member.display_name, role: member.role, localDate: state.local.localDate,
       current: state.current, next: state.next, currentPlace: places.get(state.current.placeId)?.label ?? state.current.placeId,
+      movement: state.movement,
+      assignments: { home: label(member.home_place_id),
+        work: member.work_place_id ? label(member.work_place_id) : null,
+        cafe: label(member.cafe_place_id), errand: label(member.errand_place_id),
+        leisure: label(member.leisure_place_id) },
       week: state.week,
     } })
   } catch (error) {

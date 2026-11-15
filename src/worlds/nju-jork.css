@@ -49,6 +49,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-time-toggle { min-height: 40px; padding: 0 11px; color: #f4e9d7; background: rgba(25, 55, 59, .9); border: 1px solid rgba(226, 185, 126, .65); font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap; }
 .nj-time-toggle::after { content: 'PC'; display: inline-block; margin-left: 8px; color: #edc78f; font-size: 9px; letter-spacing: .1em; }
 .nj-time-toggle[data-source='network']::after { content: 'NET'; color: #73d7ae; }
+.nj-time-toggle[data-source='preview']::after { content: 'SIM'; color: #edc78f; }
 .nj-time-toggle:hover { background: #2f4a4e; }
 .nj-time-panel { position: absolute; top: calc(100% + 10px); right: clamp(18px, 3vw, 46px); z-index: 7; width: min(320px, calc(100vw - 20px)); padding: 20px; color: #f4eee2; background: rgba(12, 34, 38, .98); border: 1px solid #d6ad75; box-shadow: 0 16px 42px rgba(3, 15, 17, .45); }
 .nj-time-panel h2 { margin: 0 0 8px; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: 28px; line-height: 1; }
@@ -57,10 +58,12 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-time-date { margin: 7px 0 0; font-size: 13px; font-weight: 700; }
 .nj-time-zone { margin: 4px 0 16px; color: #b9c9c0; font-size: 11px; overflow-wrap: anywhere; }
 .nj-time-sources { display: flex; gap: 8px; }
-.nj-time-sources button, .nj-time-refresh { min-height: 44px; padding: 0 12px; color: #f4e9d7; background: #17333a; border: 1px solid #bf9d70; font-size: 11px; font-weight: 800; }
+.nj-time-sources button, .nj-time-refresh, .nj-time-preview { min-height: 44px; padding: 0 12px; color: #f4e9d7; background: #17333a; border: 1px solid #bf9d70; font-size: 11px; font-weight: 800; }
 .nj-time-sources button { flex: 1; }
 .nj-time-sources button[aria-pressed='true'] { color: #10242a; background: #edc78f; }
-.nj-time-sources button:hover, .nj-time-refresh:hover { border-color: #fff3d7; }
+.nj-time-sources button:hover, .nj-time-refresh:hover, .nj-time-preview:hover { border-color: #fff3d7; }
+.nj-time-preview { width: 100%; margin-top: 8px; }
+.nj-time-preview[aria-pressed='true'] { color: #10242a; background: #edc78f; }
 .nj-time-sources button:disabled, .nj-time-refresh:disabled { cursor: wait; opacity: .65; }
 .nj-time-refresh { margin-top: 8px; width: 100%; }
 .nj-time-status { margin-top: 12px; min-height: 18px; }
@@ -134,6 +137,9 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-population-detail h3 { margin-top: 0; }
 .nj-population-detail p, .nj-population-detail li { margin: 5px 0; color: #d1dfd5; font-size: 11px; line-height: 1.45; }
 .nj-population-detail ol { max-height: 145px; overflow-y: auto; padding-left: 22px; }
+.nj-population-assignments { display: grid; grid-template-columns: 72px 1fr; gap: 6px 10px; margin: 12px 0; padding: 10px 0; border-top: 1px solid #4b6968; border-bottom: 1px solid #4b6968; }
+.nj-population-assignments dt { color: #edc78f; font-size: 9px; font-weight: 800; }
+.nj-population-assignments dd { margin: 0; color: #e0e9df; font-size: 11px; line-height: 1.35; }
 .nj-population-view { width: 100%; min-height: 44px; margin-top: 8px; color: #10242a; background: #edc78f; border: 1px solid #fff3d7; font-size: 11px; font-weight: 800; }
 .nj-population-view:hover { background: #fff3d7; }
 .nj-population-loading { position: absolute; z-index: 6; inset: 60px 0 48px; display: grid; place-items: center; padding: 20px; background: rgba(8, 25, 30, .91); backdrop-filter: blur(8px); }

@@ -26,6 +26,7 @@ export class NpcPopulation {
   private requestId = 0
   private inspectRequestId = 0
   private selectedId = 0
+  private followingId = 0
   private wasStreet = false
   private lastPeople: NearbyNpc[] = []
   private disposed = false
@@ -52,7 +53,7 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to them. Characters from the 100 People pack stand near their assigned place at about 1.5 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
+      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to them. Nearby characters follow mapped streets between their assigned places. Tasks follow this browser’s city clock.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
       <div class="nj-population-detail" hidden></div>`
     root.querySelector('.nj-ui')!.append(this.panel)
@@ -161,7 +162,8 @@ export class NpcPopulation {
     this.lastQuery = now
     this.requestId++
     this.post({ type: 'nearby', requestId: this.requestId, x, z,
-      radius: Math.max(110, Math.min(420, viewHeight * 1.5)), limit: 12, timeMs: this.timeMs() })
+      radius: Math.max(110, Math.min(420, viewHeight * 1.5)), limit: 12, timeMs: this.timeMs(),
+      followId: this.followingId || undefined })
     if (this.selectedId) this.inspect(this.selectedId)
   }
 
@@ -171,6 +173,7 @@ export class NpcPopulation {
 
   focusNpc(npcId: number): void {
     this.selectedId = npcId
+    this.followingId = npcId
     this.detail.hidden = false
     this.detail.textContent = 'Generating this NPC’s week…'
     this.inspect(npcId)
@@ -178,6 +181,10 @@ export class NpcPopulation {
     this.button.setAttribute('aria-expanded', 'false')
     this.onFocus(npcId)
   }
+
+  stopFollowing(): void { this.followingId = 0 }
+
+  refreshNow(): void { this.refresh(this.lastX, this.lastZ, true) }
 
   private showNearby(people: NearbyNpc[]): void {
     this.lastPeople = people
@@ -195,7 +202,7 @@ export class NpcPopulation {
       const name = document.createElement('strong')
       name.textContent = person.name
       const activity = document.createElement('span')
-      activity.textContent = `${person.activity} · ${person.placeLabel}`
+      activity.textContent = person.movement ? person.activity : `${person.activity} · ${person.placeLabel}`
       const role = document.createElement('small')
       role.textContent = `${person.role.toUpperCase()} · ${Math.round(person.distance)} blocks away`
       button.append(name, activity, role)
@@ -210,9 +217,12 @@ export class NpcPopulation {
     const heading = document.createElement('h3')
     heading.textContent = person.name
     const summary = document.createElement('p')
-    summary.textContent = `${person.role.toUpperCase()} · ${person.localDate} · ${person.currentPlace}`
+    summary.textContent = `${person.role.toUpperCase()} · ${person.localDate} · ${person.movement
+      ? `${person.movement.from.label} → ${person.movement.to.label}` : person.currentPlace}`
     const current = document.createElement('p')
-    current.textContent = `NOW ${clock(person.current.startMinute)}–${clock(person.current.endMinute)} · ${person.current.activity}`
+    current.textContent = person.movement
+      ? `NOW ${clock(person.movement.startMinute)}–${clock(person.movement.endMinute)} · walking to ${person.movement.to.label}`
+      : `NOW ${clock(person.current.startMinute)}–${clock(person.current.endMinute)} · ${person.current.activity}`
     const next = document.createElement('p')
     next.textContent = `NEXT ${clock(person.next.startMinute)} · ${person.next.activity}`
     const daily = document.createElement('ol')
@@ -222,7 +232,16 @@ export class NpcPopulation {
       row.textContent = `${clock(episode.startMinute)} ${episode.activity}`
       daily.append(row)
     }
-    this.detail.append(heading, summary, current, next, daily)
+    const assignments = document.createElement('dl')
+    assignments.className = 'nj-population-assignments'
+    for (const [kind, place] of Object.entries(person.assignments)) {
+      const term = document.createElement('dt')
+      term.textContent = kind === 'work' && person.role === 'student' ? 'SCHOOL' : kind.toUpperCase()
+      const description = document.createElement('dd')
+      description.textContent = place ?? 'No regular assignment'
+      assignments.append(term, description)
+    }
+    this.detail.append(heading, summary, current, next, assignments, daily)
     if (this.lastPeople.some((nearby) => nearby.npcId === person.npcId)) {
       const view = document.createElement('button')
       view.type = 'button'

@@ -1,7 +1,28 @@
 const TIME_URL = 'https://gettimeapi.dev/v1/time?timezone=UTC'
 const SYNC_INTERVAL_MS = 5 * 60 * 1000
 
-type TimeSource = 'pc' | 'network'
+type TimeSource = 'pc' | 'network' | 'preview'
+
+const PREVIEW_SPEED = 20
+
+export function nextNewYorkMondayMorning(epoch: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(epoch)
+  const part = (name: string) => parts.find((item) => item.type === name)!.value
+  const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(part('weekday'))
+  const daysAhead = (7 - weekday) % 7
+  const year = Number(part('year')), month = Number(part('month')), day = Number(part('day')) + daysAhead
+  const noon = Date.UTC(year, month - 1, day, 12)
+  const offsetPart = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', timeZoneName: 'shortOffset',
+  }).formatToParts(noon).find((item) => item.type === 'timeZoneName')?.value ?? 'GMT-5'
+  const match = /^GMT([+-])(\d{1,2})(?::(\d{2}))?$/.exec(offsetPart)
+  const offsetMinutes = match ? (match[1] === '+' ? 1 : -1) *
+    (Number(match[2]) * 60 + Number(match[3] ?? 0)) : -300
+  return Date.UTC(year, month - 1, day, 8, 45) - offsetMinutes * 60000
+}
 
 /** Keeps the city clock tied to the device clock or a requested internet time. */
 export class TimeManager {
@@ -14,16 +35,19 @@ export class TimeManager {
   private readonly status = document.createElement('p')
   private readonly pcButton = document.createElement('button')
   private readonly networkButton = document.createElement('button')
+  private readonly previewButton = document.createElement('button')
   private readonly refreshButton = document.createElement('button')
   private readonly timer: number
   private source: TimeSource = 'pc'
   private networkEpoch = 0
   private networkAnchor = 0
+  private previewEpoch = 0
+  private previewAnchor = 0
   private lastSync = 0
   private syncing = false
   private request: AbortController | null = null
 
-  constructor(topbar: HTMLElement) {
+  constructor(topbar: HTMLElement, private readonly onTimeChange: () => void = () => {}) {
     this.root.className = 'nj-time-manager'
 
     this.toggle.type = 'button'
@@ -41,7 +65,7 @@ export class TimeManager {
     heading.textContent = 'Time Manager'
     const intro = document.createElement('p')
     intro.className = 'nj-time-intro'
-    intro.textContent = 'Show your PC time, or request the current time from the internet.'
+    intro.textContent = 'Use the live clock or preview a New York morning commute on this device.'
     this.clock.className = 'nj-time-clock'
     this.clock.setAttribute('aria-label', 'Current time')
     this.date.className = 'nj-time-date'
@@ -58,6 +82,10 @@ export class TimeManager {
     this.networkButton.textContent = 'Internet time'
     this.networkButton.addEventListener('click', () => void this.syncNetwork())
     sources.append(this.pcButton, this.networkButton)
+    this.previewButton.type = 'button'
+    this.previewButton.className = 'nj-time-preview'
+    this.previewButton.textContent = 'Preview morning commute · 20×'
+    this.previewButton.addEventListener('click', () => this.previewMorning())
 
     this.refreshButton.type = 'button'
     this.refreshButton.className = 'nj-time-refresh'
@@ -66,7 +94,8 @@ export class TimeManager {
     this.status.className = 'nj-time-status'
     this.status.setAttribute('role', 'status')
     this.status.textContent = 'Reading time from this PC.'
-    this.panel.append(heading, intro, this.clock, this.date, this.zone, sources, this.refreshButton, this.status)
+    this.panel.append(heading, intro, this.clock, this.date, this.zone, sources, this.previewButton,
+      this.refreshButton, this.status)
     this.root.append(this.toggle, this.panel)
     topbar.insertBefore(this.root, topbar.querySelector('.nj-status'))
     this.root.addEventListener('keydown', (event) => {
@@ -94,7 +123,10 @@ export class TimeManager {
   }
 
   nowMs(): number {
-    return this.source === 'pc' ? Date.now() : this.networkEpoch + performance.now() - this.networkAnchor
+    if (this.source === 'preview') return Math.round(this.previewEpoch +
+      (performance.now() - this.previewAnchor) * PREVIEW_SPEED)
+    return this.source === 'pc' ? Date.now() :
+      Math.round(this.networkEpoch + performance.now() - this.networkAnchor)
   }
 
   private readonly onOutsidePointer = (event: PointerEvent): void => {
@@ -116,6 +148,21 @@ export class TimeManager {
     this.source = 'pc'
     this.status.textContent = 'Reading time from this PC.'
     this.render()
+    this.onTimeChange()
+  }
+
+  private previewMorning(): void {
+    this.request?.abort()
+    this.request = null
+    this.syncing = false
+    this.networkButton.disabled = false
+    this.refreshButton.disabled = false
+    this.previewEpoch = nextNewYorkMondayMorning(Date.now())
+    this.previewAnchor = performance.now()
+    this.source = 'preview'
+    this.status.textContent = 'Simulating Monday morning in New York at 20× speed on this device.'
+    this.render()
+    this.onTimeChange()
   }
 
   private async syncNetwork(): Promise<void> {
@@ -145,6 +192,7 @@ export class TimeManager {
       this.source = 'network'
       this.status.textContent = 'Internet time synced. Updates every 5 minutes.'
       this.render()
+      this.onTimeChange()
     } catch {
       if (this.request !== request) return
       this.status.textContent = this.source === 'network'
@@ -164,16 +212,22 @@ export class TimeManager {
   private render(): void {
     const epoch = this.nowMs()
     const now = new Date(epoch)
-    const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)
+    const timeZone = this.source === 'preview' ? 'America/New_York' : undefined
+    const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone }).format(now)
     this.toggle.textContent = time
     this.toggle.dataset.source = this.source
-    this.toggle.title = `Time Manager · ${this.source === 'pc' ? 'PC time' : 'Internet time'}`
+    this.toggle.title = `Time Manager · ${this.source === 'pc' ? 'PC time' :
+      this.source === 'network' ? 'Internet time' : 'New York commute preview'}`
     this.clock.textContent = time
     this.clock.dateTime = now.toISOString()
-    this.date.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(now)
-    this.zone.textContent = `Your PC time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time'}`
+    this.date.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', year: 'numeric',
+      month: 'long', day: 'numeric', timeZone }).format(now)
+    this.zone.textContent = this.source === 'preview' ? 'New York time · 20× playback' :
+      `Your PC time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local time'}`
     this.pcButton.setAttribute('aria-pressed', String(this.source === 'pc'))
     this.networkButton.setAttribute('aria-pressed', String(this.source === 'network'))
+    this.previewButton.setAttribute('aria-pressed', String(this.source === 'preview'))
     this.refreshButton.hidden = this.source !== 'network'
   }
 }

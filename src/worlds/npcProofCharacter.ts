@@ -30,6 +30,7 @@ const DEG = Math.PI / 180
 const actions: Record<string, ActionDef> = {
   idle: { clip: 'idle', speed: 1 },
   walk: { clip: 'walk', speed: 1 },
+  run: { clip: 'run', speed: 1 },
   work: { clip: 'happy_dance_2', speed: 0.7, upperBodyOnly: true },
   talk: { clip: 'sitting+hand_up', speed: 0.95, upperBodyOnly: true },
   prepare: { clip: 'happy_dance_2', speed: 0.7, upperBodyOnly: true },

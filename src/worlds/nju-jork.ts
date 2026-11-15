@@ -98,7 +98,7 @@ app.innerHTML = `
   </div>
 `
 
-const timeManager = new TimeManager(app.querySelector<HTMLElement>('.nj-topbar')!)
+const timeManager = new TimeManager(app.querySelector<HTMLElement>('.nj-topbar')!, () => npcPopulation.refreshNow())
 if (import.meta.hot) import.meta.hot.dispose(() => timeManager.dispose())
 
 const stage = app.querySelector<HTMLDivElement>('.nj-stage')!
@@ -208,7 +208,11 @@ function proofCameraOrbit(x: number, z: number) {
   // Face the home entrance from W 45th St, then the cart from along 7th Ave.
   return x > -525 || z < -67 ? -Math.PI / 2 : -Math.PI
 }
+let followPopulationId = 0
 const npcProof = new NpcProof(scene, app, camera, (x, z, height) => {
+  followPopulationId = 0
+  npcPopulation.stopFollowing()
+  npcPopulationFigures.select(0)
   targetFocus.set(x, 0, z)
   targetViewHeight = height
   orbit = proofCameraOrbit(x, z)
@@ -223,16 +227,25 @@ const npcPopulation = new NpcPopulation(app, `${assetBase}npc-data/`,
     const point = npcPopulationFigures.positionFor(npcId)
     if (!point) return
     npcProof.stopFollowing()
+    followPopulationId = npcId
+    npcPopulationFigures.select(npcId)
     targetFocus.set(point.x, 0, point.z)
-    targetViewHeight = 10
+    targetViewHeight = 7
     orbit = npcPopulationFigures.orbitFor(npcId) ?? 0
-    tiltAdjustment = .25
+    tiltAdjustment = .5
     dirty = true
   }, () => timeManager.nowMs())
 if (import.meta.hot) import.meta.hot.dispose(() => {
   npcPopulation.dispose()
   npcPopulationFigures.dispose()
 })
+
+function stopFollowingNpc() {
+  npcProof.stopFollowing()
+  npcPopulation.stopFollowing()
+  followPopulationId = 0
+  npcPopulationFigures.select(0)
+}
 
 function key(rx: number, rz: number) { return `${rx},${rz}` }
 
@@ -252,7 +265,7 @@ function jumpToLandmark(id: string) {
   const tower = station ? undefined : skylineView(id)
   const landmark = station ?? tower
   if (!landmark) return
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   targetFocus.set(landmark.x, 0, landmark.z)
   targetViewHeight = tower ? skylineViewHeight(tower.height) : 135
   tiltAdjustment = tower ? -.18 : .8
@@ -375,7 +388,7 @@ function clampFocus() {
 }
 
 function overviewView() {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   const [left, top, right, bottom] = zone.bounds
   targetFocus.set((left + right) / 2, 0, (top + bottom) / 2)
   const aspect = Math.max(.5, stage.clientWidth / Math.max(1, stage.clientHeight))
@@ -672,6 +685,7 @@ roadLabels.addEventListener('click', (event) => {
 async function activateZone(next: Zone) {
   const epoch = ++zoneEpoch
   zone = next
+  stopFollowingNpc()
   npcProof.setZone(next.id)
   npcPopulationFigures.setZone(next.id)
   showRoads(next.id)
@@ -1017,7 +1031,7 @@ function refreshTiles(now: number) {
 const pointers = new Map<number, { x: number; y: number }>()
 const tapOrigins = new Map<number, { x: number; y: number; button: number; moved: boolean; multi: boolean }>()
 function pan(dx: number, dy: number) {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   const unit = viewHeight / Math.max(1, stage.clientHeight)
   const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
   const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1)
@@ -1049,7 +1063,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
       pan(dx / 2, dy / 2)
     }
   } else if (event.shiftKey || event.buttons === 2) {
-    npcProof.stopFollowing()
+    stopFollowingNpc()
     orbit -= dx * .004
     tiltAdjustment = THREE.MathUtils.clamp(tiltAdjustment + dy * .003, -.42, .42)
     dirty = true
@@ -1077,23 +1091,23 @@ renderer.domElement.addEventListener('pointercancel', (event) => {
 renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault())
 renderer.domElement.addEventListener('wheel', (event) => {
   event.preventDefault()
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   targetViewHeight = THREE.MathUtils.clamp(targetViewHeight * Math.exp(event.deltaY * .0012), 7, 6500)
   dirty = true
 }, { passive: false })
 
 app.querySelector<HTMLButtonElement>('#nj-zoom-in')!.addEventListener('click', () => {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   targetViewHeight = Math.max(7, targetViewHeight * .64)
   dirty = true
 })
 app.querySelector<HTMLButtonElement>('#nj-zoom-out')!.addEventListener('click', () => {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   targetViewHeight = Math.min(6500, targetViewHeight * 1.55)
   dirty = true
 })
 app.querySelector<HTMLButtonElement>('#nj-street')!.addEventListener('click', () => {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   if (viewHeight > 1450) targetFocus.set(zone.start[0], 0, zone.start[1])
   if (bridgeDeckAtFocus() && manifest.brooklynBridge) {
     const [x, z] = brooklynFootpathAt(manifest.brooklynBridge, focus.x, focus.z)
@@ -1106,7 +1120,7 @@ app.querySelector<HTMLButtonElement>('#nj-street')!.addEventListener('click', ()
 app.querySelector<HTMLButtonElement>('#nj-overview')!.addEventListener('click', overviewView)
 app.querySelector<HTMLButtonElement>('#nj-proof')!.addEventListener('click', () => { void npcProof.open() })
 app.querySelector<HTMLButtonElement>('#nj-brooklyn')!.addEventListener('click', () => {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   const bridge = manifest?.brooklynBridge
   if (!bridge || zone?.id !== 'city') return
   targetFocus.set((bridge.towers[0][0] + bridge.towers[1][0]) / 2, 0,
@@ -1115,7 +1129,7 @@ app.querySelector<HTMLButtonElement>('#nj-brooklyn')!.addEventListener('click', 
   dirty = true
 })
 app.querySelector<HTMLButtonElement>('#nj-park')!.addEventListener('click', () => {
-  npcProof.stopFollowing()
+  stopFollowingNpc()
   if (!manifest?.parkFocus || zone?.id !== 'city') return
   targetFocus.set(manifest.parkFocus[0], 0, manifest.parkFocus[1])
   targetViewHeight = 180
@@ -1195,6 +1209,9 @@ function frame(now: number) {
   if (follow) {
     targetFocus.set(follow.x, 0, follow.z)
     orbit = THREE.MathUtils.lerp(orbit, proofCameraOrbit(follow.x, follow.z), Math.min(1, dt * 3))
+  } else if (followPopulationId) {
+    const point = npcPopulationFigures.positionFor(followPopulationId)
+    if (point) targetFocus.set(point.x, 0, point.z)
   }
   const blend = 1 - Math.exp(-8 * dt)
   focus.lerp(targetFocus, blend)
@@ -1202,7 +1219,7 @@ function frame(now: number) {
   const moving = focus.distanceToSquared(targetFocus) > .05 || Math.abs(viewHeight - targetViewHeight) > .05
   if (moving || dirty) updateCamera()
   const proofChanged = npcProof.update(dt, viewHeight, focus)
-  const populationChanged = npcPopulationFigures.update(dt, viewHeight, focus)
+  const populationChanged = npcPopulationFigures.update(dt, viewHeight, focus, timeManager.nowMs())
   npcPopulation.update(focus.x, focus.z, viewHeight, now)
   refreshTiles(now)
   if (brooklynModel) {
@@ -1296,7 +1313,7 @@ async function loadWorld() {
       const roadResponse = await fetch(`${assetBase}${manifest.roadNetwork}`)
       if (roadResponse.ok) roadNetwork = await roadResponse.json() as RoadNetwork
     }
-    npcPopulationFigures.setRoadNodes(roadNetwork?.zones.city?.nodes ?? [])
+    npcPopulationFigures.setRoadNodes(roadNetwork?.zones.city?.nodes ?? [], roadNetwork?.zones.city?.roads ?? [])
     try {
       const catalogResponse = await fetch(`${assetBase}place-catalog.json`)
       if (catalogResponse.ok) {
