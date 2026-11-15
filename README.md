@@ -4,6 +4,8 @@ A playable Three.js portfolio for [Bindo](https://github.com/Bindo56), published
 
 ## Run locally
 
+For complete prerequisites and optional services, see the [setup guide](SETUP.md).
+
 Use Node.js 22 or newer.
 
 ~~~sh
