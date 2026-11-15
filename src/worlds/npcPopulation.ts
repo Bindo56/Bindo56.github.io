@@ -52,7 +52,7 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Characters from the 100 People pack stand near their assigned place at about 1.5 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
+      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to them. Characters from the 100 People pack stand near their assigned place at about 1.5 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
       <div class="nj-population-detail" hidden></div>`
     root.querySelector('.nj-ui')!.append(this.panel)
@@ -169,6 +169,16 @@ export class NpcPopulation {
     this.post({ type: 'inspect', requestId: ++this.inspectRequestId, npcId, timeMs: this.timeMs() })
   }
 
+  focusNpc(npcId: number): void {
+    this.selectedId = npcId
+    this.detail.hidden = false
+    this.detail.textContent = 'Generating this NPC’s week…'
+    this.inspect(npcId)
+    this.panel.hidden = true
+    this.button.setAttribute('aria-expanded', 'false')
+    this.onFocus(npcId)
+  }
+
   private showNearby(people: NearbyNpc[]): void {
     this.lastPeople = people
     this.onNearby(people)
@@ -181,7 +191,7 @@ export class NpcPopulation {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'nj-population-person'
-      button.setAttribute('aria-label', `Inspect ${person.name}`)
+      button.setAttribute('aria-label', `Zoom to ${person.name} in the city`)
       const name = document.createElement('strong')
       name.textContent = person.name
       const activity = document.createElement('span')
@@ -189,12 +199,7 @@ export class NpcPopulation {
       const role = document.createElement('small')
       role.textContent = `${person.role.toUpperCase()} · ${Math.round(person.distance)} blocks away`
       button.append(name, activity, role)
-      button.addEventListener('click', () => {
-        this.selectedId = person.npcId
-        this.detail.hidden = false
-        this.detail.textContent = 'Generating this NPC’s week…'
-        this.inspect(person.npcId)
-      })
+      button.addEventListener('click', () => this.focusNpc(person.npcId))
       this.list.append(button)
     }
   }
@@ -224,9 +229,7 @@ export class NpcPopulation {
       view.className = 'nj-population-view'
       view.textContent = 'VIEW NPC IN CITY'
       view.addEventListener('click', () => {
-        this.panel.hidden = true
-        this.button.setAttribute('aria-expanded', 'false')
-        this.onFocus(person.npcId)
+        this.focusNpc(person.npcId)
       })
       this.detail.append(view)
     }

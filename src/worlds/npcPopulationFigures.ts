@@ -139,6 +139,21 @@ export class NpcPopulationFigures {
     return this.orbits.get(npcId) ?? null
   }
 
+  pick(camera: THREE.Camera, x: number, y: number): number | null {
+    if (!this.group.visible) return null
+    const ray = new THREE.Raycaster()
+    ray.setFromCamera(new THREE.Vector2(x, y), camera)
+    for (const hit of ray.intersectObject(this.group, true)) {
+      let object: THREE.Object3D | null = hit.object
+      while (object && object !== this.group) {
+        const id = object.userData.npcId
+        if (typeof id === 'number' && object.visible) return id
+        object = object.parent
+      }
+    }
+    return null
+  }
+
   update(dt: number, viewHeight: number, focus: THREE.Vector3): boolean {
     const enabled = this.zoneId === 'city' && viewHeight < 200
     if (this.group.visible !== enabled) {

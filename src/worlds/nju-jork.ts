@@ -1015,6 +1015,7 @@ function refreshTiles(now: number) {
 }
 
 const pointers = new Map<number, { x: number; y: number }>()
+const tapOrigins = new Map<number, { x: number; y: number; button: number; moved: boolean; multi: boolean }>()
 function pan(dx: number, dy: number) {
   npcProof.stopFollowing()
   const unit = viewHeight / Math.max(1, stage.clientHeight)
@@ -1026,10 +1027,15 @@ function pan(dx: number, dy: number) {
   dirty = true
 }
 renderer.domElement.addEventListener('pointerdown', (event) => {
+  if (pointers.size) for (const tap of tapOrigins.values()) tap.multi = true
+  tapOrigins.set(event.pointerId, { x: event.clientX, y: event.clientY,
+    button: event.button, moved: false, multi: pointers.size > 0 })
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
   renderer.domElement.setPointerCapture(event.pointerId)
 })
 renderer.domElement.addEventListener('pointermove', (event) => {
+  const tap = tapOrigins.get(event.pointerId)
+  if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 5) tap.moved = true
   const old = pointers.get(event.pointerId)
   if (!old) return
   const dx = event.clientX - old.x
@@ -1050,8 +1056,24 @@ renderer.domElement.addEventListener('pointermove', (event) => {
   } else pan(dx, dy)
   pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
 })
-renderer.domElement.addEventListener('pointerup', (event) => pointers.delete(event.pointerId))
-renderer.domElement.addEventListener('pointercancel', (event) => pointers.delete(event.pointerId))
+renderer.domElement.addEventListener('pointerup', (event) => {
+  const tap = tapOrigins.get(event.pointerId)
+  const single = pointers.size === 1
+  pointers.delete(event.pointerId)
+  tapOrigins.delete(event.pointerId)
+  if (!tap || !single || tap.button !== 0 || tap.multi || tap.moved || event.shiftKey
+    || Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 5
+    || zone?.id !== 'city' || viewHeight >= 200) return
+  const bounds = renderer.domElement.getBoundingClientRect()
+  const x = (event.clientX - bounds.left) / bounds.width * 2 - 1
+  const y = 1 - (event.clientY - bounds.top) / bounds.height * 2
+  const npcId = npcPopulationFigures.pick(camera, x, y)
+  if (npcId !== null) npcPopulation.focusNpc(npcId)
+})
+renderer.domElement.addEventListener('pointercancel', (event) => {
+  pointers.delete(event.pointerId)
+  tapOrigins.delete(event.pointerId)
+})
 renderer.domElement.addEventListener('contextmenu', (event) => event.preventDefault())
 renderer.domElement.addEventListener('wheel', (event) => {
   event.preventDefault()
