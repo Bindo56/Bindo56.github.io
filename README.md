@@ -20,6 +20,10 @@ npx playwright install chromium
 npm run test:e2e
 ~~~
 
+After `npm run dev`, open the local URL printed by Vite. To inspect the production output locally, run `npm run build` followed by `npm run preview`; the build output is `dist/`.
+
+Live-post integrations are optional. If you need them, copy `.env.example` to `.env.local` and fill only the server-side keys for the sources you use. The base portfolio runs without those keys. Keep `.env.local` private; it is ignored by Git. The `.env.example` comments describe each provider and its settings.
+
 The existing Pages workflow runs the unit tests through the build command, then builds and deploys the production site from the main branch.
 
 ## Controls
