@@ -11,6 +11,7 @@ await page.addInitScript(({ epoch }) => { Date.now = () => epoch },
   { epoch: Date.parse('2026-11-16T02:30:00Z') })
 try {
   await page.goto(`${origin}/worlds/clockwork-city/?x=-535&z=-32&height=10`, { waitUntil: 'domcontentloaded' })
+  await page.locator('#nj-loading').waitFor({ state: 'hidden', timeout: 120000 })
   await page.locator('.nj-population-loading').waitFor({ state: 'hidden', timeout: 60000 })
   await page.locator('.nj-population-button').click()
   await page.locator('.nj-population-person').first().waitFor({ timeout: 60000 })
