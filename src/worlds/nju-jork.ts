@@ -15,6 +15,7 @@ import { buildTimesSquare, TIMES_SQUARE, type TimesSquareScene } from './skyline
 import { TimeManager } from './TimeManager'
 import { NpcProof } from './npcProof'
 import { NpcPopulation } from './npcPopulation'
+import { NpcPopulationFigures } from './npcPopulationFigures'
 import './nju-jork.css'
 
 type Zone = {
@@ -115,8 +116,6 @@ const labelButton = app.querySelector<HTMLButtonElement>('#nj-labels')!
 const transitKey = app.querySelector<HTMLElement>('#nj-transit-key')!
 const placeCard = app.querySelector<HTMLElement>('#nj-place-card')!
 const assetBase = `${import.meta.env.BASE_URL}assets/nju-jork/`
-const npcPopulation = new NpcPopulation(app, `${assetBase}npc-data/`)
-if (import.meta.hot) import.meta.hot.dispose(() => npcPopulation.dispose())
 let placeCatalog: PlaceCatalog | null = null
 let npcOccupancy: NpcOccupancy | null = null
 let mappedKind = ''
@@ -217,6 +216,23 @@ const npcProof = new NpcProof(scene, app, camera, (x, z, height) => {
   dirty = true
 })
 if (import.meta.hot) import.meta.hot.dispose(() => npcProof.dispose())
+const npcPopulationFigures = new NpcPopulationFigures(scene, () => { dirty = true })
+const npcPopulation = new NpcPopulation(app, `${assetBase}npc-data/`,
+  (people) => npcPopulationFigures.setPeople(people),
+  (npcId) => {
+    const point = npcPopulationFigures.positionFor(npcId)
+    if (!point) return
+    npcProof.stopFollowing()
+    targetFocus.set(point.x, 0, point.z)
+    targetViewHeight = 10
+    orbit = npcPopulationFigures.orbitFor(npcId) ?? 0
+    tiltAdjustment = .25
+    dirty = true
+  }, () => timeManager.nowMs())
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  npcPopulation.dispose()
+  npcPopulationFigures.dispose()
+})
 
 function key(rx: number, rz: number) { return `${rx},${rz}` }
 
@@ -657,6 +673,7 @@ async function activateZone(next: Zone) {
   const epoch = ++zoneEpoch
   zone = next
   npcProof.setZone(next.id)
+  npcPopulationFigures.setZone(next.id)
   showRoads(next.id)
   activeTransit = transitNetwork?.zones[next.id]
   activeStations = new Map(activeTransit?.nodes.filter((node) => node.kind === 'station')
@@ -1163,6 +1180,7 @@ function frame(now: number) {
   const moving = focus.distanceToSquared(targetFocus) > .05 || Math.abs(viewHeight - targetViewHeight) > .05
   if (moving || dirty) updateCamera()
   const proofChanged = npcProof.update(dt, viewHeight, focus)
+  const populationChanged = npcPopulationFigures.update(viewHeight, focus)
   npcPopulation.update(focus.x, focus.z, viewHeight, now)
   refreshTiles(now)
   if (brooklynModel) {
@@ -1203,7 +1221,7 @@ function frame(now: number) {
   }
   if (moving || dirty) updateRoadOverlay()
   if (moving || dirty) updateMapLabels(now)
-  if (moving || dirty || proofChanged) {
+  if (moving || dirty || proofChanged || populationChanged) {
     renderer.render(scene, camera)
     transitOverlay.draw(activeTransit, transitNetwork?.surfaceRail ?? [], camera, subwayVisible, metroVisible, viewHeight, focus)
   }
@@ -1256,6 +1274,7 @@ async function loadWorld() {
       const roadResponse = await fetch(`${assetBase}${manifest.roadNetwork}`)
       if (roadResponse.ok) roadNetwork = await roadResponse.json() as RoadNetwork
     }
+    npcPopulationFigures.setRoadNodes(roadNetwork?.zones.city?.nodes ?? [])
     try {
       const catalogResponse = await fetch(`${assetBase}place-catalog.json`)
       if (catalogResponse.ok) {

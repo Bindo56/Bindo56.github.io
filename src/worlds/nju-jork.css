@@ -134,6 +134,8 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-population-detail h3 { margin-top: 0; }
 .nj-population-detail p, .nj-population-detail li { margin: 5px 0; color: #d1dfd5; font-size: 11px; line-height: 1.45; }
 .nj-population-detail ol { max-height: 145px; overflow-y: auto; padding-left: 22px; }
+.nj-population-view { width: 100%; min-height: 44px; margin-top: 8px; color: #10242a; background: #edc78f; border: 1px solid #fff3d7; font-size: 11px; font-weight: 800; }
+.nj-population-view:hover { background: #fff3d7; }
 .nj-population-loading { position: absolute; z-index: 6; inset: 60px 0 48px; display: grid; place-items: center; padding: 20px; background: rgba(8, 25, 30, .91); backdrop-filter: blur(8px); }
 .nj-population-loading-card { width: min(420px, 100%); padding: 28px; color: #f4eee2; background: #102c32; border: 1px solid #d6ad75; box-shadow: 0 22px 60px rgba(3, 15, 17, .55); }
 .nj-population-loading-card p { margin: 0 0 18px; color: #d1dfd5; font-size: 13px; }

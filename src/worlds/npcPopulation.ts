@@ -24,10 +24,16 @@ export class NpcPopulation {
   private lastX = NaN
   private lastZ = NaN
   private requestId = 0
+  private inspectRequestId = 0
   private selectedId = 0
+  private wasStreet = false
+  private lastPeople: NearbyNpc[] = []
   private disposed = false
 
-  constructor(root: HTMLElement, private readonly baseUrl: string) {
+  constructor(root: HTMLElement, private readonly baseUrl: string,
+    private readonly onNearby: (people: NearbyNpc[]) => void,
+    private readonly onFocus: (npcId: number) => void,
+    private readonly timeMs: () => number) {
     const controls = root.querySelector('.nj-controls')!
     this.button = document.createElement('button')
     this.button.type = 'button'
@@ -46,7 +52,7 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Current tasks are generated from each NPC’s weekly plan. Positions show their assigned place, not a walking route.</p>
+      <h3>Near the camera</h3><p class="nj-population-note">Figures stand by their assigned place and are about 1.8 m tall. Tasks follow this browser’s time; travel routes are approximate.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
       <div class="nj-population-detail" hidden></div>`
     root.querySelector('.nj-ui')!.append(this.panel)
@@ -125,7 +131,7 @@ export class NpcPopulation {
       this.fail(message.message)
     } else if (message.type === 'nearby' && message.requestId === this.requestId) {
       this.showNearby(message.people)
-    } else if (message.type === 'inspect' && message.requestId === this.requestId) {
+    } else if (message.type === 'inspect' && message.requestId === this.inspectRequestId) {
       if (message.result) this.showDetail(message.result)
       else this.detail.textContent = message.error ?? 'This NPC is not available yet.'
     }
@@ -142,9 +148,10 @@ export class NpcPopulation {
   update(x: number, z: number, viewHeight: number, now: number): void {
     this.lastX = x
     this.lastZ = z
-    if (this.ready && !this.panel.hidden && now - this.lastQuery > 5000) {
-      this.refresh(x, z, false, viewHeight)
-    }
+    const street = viewHeight < 200
+    if (this.ready && (street || !this.panel.hidden) && (street && !this.wasStreet || now - this.lastQuery > 5000))
+      this.refresh(x, z, street && !this.wasStreet, viewHeight)
+    this.wasStreet = street
   }
 
   private refresh(x: number, z: number, force: boolean, viewHeight = 260): void {
@@ -154,11 +161,17 @@ export class NpcPopulation {
     this.lastQuery = now
     this.requestId++
     this.post({ type: 'nearby', requestId: this.requestId, x, z,
-      radius: Math.max(110, Math.min(420, viewHeight * 1.5)), limit: 12, timeMs: Date.now() })
-    if (this.selectedId) this.post({ type: 'inspect', requestId: this.requestId, npcId: this.selectedId, timeMs: Date.now() })
+      radius: Math.max(110, Math.min(420, viewHeight * 1.5)), limit: 12, timeMs: this.timeMs() })
+    if (this.selectedId) this.inspect(this.selectedId)
+  }
+
+  private inspect(npcId: number): void {
+    this.post({ type: 'inspect', requestId: ++this.inspectRequestId, npcId, timeMs: this.timeMs() })
   }
 
   private showNearby(people: NearbyNpc[]): void {
+    this.lastPeople = people
+    this.onNearby(people)
     this.list.replaceChildren()
     if (!people.length) {
       this.list.textContent = 'No assigned NPC places are near this camera position. Pan toward mapped buildings.'
@@ -180,7 +193,7 @@ export class NpcPopulation {
         this.selectedId = person.npcId
         this.detail.hidden = false
         this.detail.textContent = 'Generating this NPC’s week…'
-        this.post({ type: 'inspect', requestId: this.requestId, npcId: person.npcId, timeMs: Date.now() })
+        this.inspect(person.npcId)
       })
       this.list.append(button)
     }
@@ -205,6 +218,18 @@ export class NpcPopulation {
       daily.append(row)
     }
     this.detail.append(heading, summary, current, next, daily)
+    if (this.lastPeople.some((nearby) => nearby.npcId === person.npcId)) {
+      const view = document.createElement('button')
+      view.type = 'button'
+      view.className = 'nj-population-view'
+      view.textContent = 'VIEW NPC IN CITY'
+      view.addEventListener('click', () => {
+        this.panel.hidden = true
+        this.button.setAttribute('aria-expanded', 'false')
+        this.onFocus(person.npcId)
+      })
+      this.detail.append(view)
+    }
   }
 
   dispose(): void {

@@ -93,6 +93,10 @@ export class TimeManager {
     this.root.remove()
   }
 
+  nowMs(): number {
+    return this.source === 'pc' ? Date.now() : this.networkEpoch + performance.now() - this.networkAnchor
+  }
+
   private readonly onOutsidePointer = (event: PointerEvent): void => {
     if (!this.root.contains(event.target as Node)) this.setOpen(false)
   }
@@ -158,7 +162,7 @@ export class TimeManager {
   }
 
   private render(): void {
-    const epoch = this.source === 'pc' ? Date.now() : this.networkEpoch + performance.now() - this.networkAnchor
+    const epoch = this.nowMs()
     const now = new Date(epoch)
     const time = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)
     this.toggle.textContent = time
