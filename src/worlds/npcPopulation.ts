@@ -7,6 +7,16 @@ function clock(minute: number): string {
   return `${(hour % 12) || 12}:${String(minute % 60).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
 }
 
+function activityLabel(activity: string): string {
+  const labels: Record<string, string> = {
+    sleep: 'Sleeping at home', home: 'At home', work: 'Working', school: 'In class',
+    meal_break: 'Taking a meal break', cafe_visit: 'Visiting a cafe',
+    errand: 'Running an errand', leisure: 'Enjoying free time',
+    social_meeting: 'Meeting someone',
+  }
+  return labels[activity] ?? activity.replaceAll('_', ' ')
+}
+
 export class NpcPopulation {
   private worker: Worker | null = null
   private readonly button: HTMLButtonElement
@@ -53,9 +63,9 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to their location. People inside homes, offices, schools, shops, and cafes stay in their buildings. Walking characters use sidewalks and entrances. Tasks follow this browser’s city clock.</p>
-      <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
-      <div class="nj-population-detail" hidden></div>`
+      <div class="nj-population-detail" hidden></div>
+      <h3>Near the camera</h3><p class="nj-population-note">Select a person to see what they are doing and zoom to their location. People inside homes, offices, schools, shops, and cafes stay in their buildings. Walking characters use sidewalks and entrances. Tasks follow this browser’s city clock.</p>
+      <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>`
     root.querySelector('.nj-ui')!.append(this.panel)
     this.status = this.panel.querySelector('.nj-population-status')!
     this.progress = this.panel.querySelector('.nj-population-progress')!
@@ -176,9 +186,12 @@ export class NpcPopulation {
     this.followingId = npcId
     this.detail.hidden = false
     this.detail.textContent = 'Generating this NPC’s week…'
+    this.panel.hidden = false
+    this.button.setAttribute('aria-expanded', 'true')
+    this.panel.scrollTop = 0
+    for (const item of this.list.querySelectorAll<HTMLButtonElement>('.nj-population-person'))
+      item.setAttribute('aria-pressed', String(item.dataset.npcId === String(npcId)))
     this.inspect(npcId)
-    this.panel.hidden = true
-    this.button.setAttribute('aria-expanded', 'false')
     this.onFocus(npcId)
   }
 
@@ -198,7 +211,9 @@ export class NpcPopulation {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'nj-population-person'
-      button.setAttribute('aria-label', `Zoom to ${person.name} in the city`)
+      button.dataset.npcId = String(person.npcId)
+      button.setAttribute('aria-pressed', String(person.npcId === this.selectedId))
+      button.setAttribute('aria-label', `Show ${person.name}'s activity and zoom to their location`)
       const name = document.createElement('strong')
       name.textContent = person.name
       const activity = document.createElement('span')
@@ -222,16 +237,17 @@ export class NpcPopulation {
     summary.textContent = `${person.role.toUpperCase()} · ${person.localDate} · ${person.movement
       ? `${person.movement.from.label} → ${person.movement.to.label}` : person.currentPlace}`
     const current = document.createElement('p')
+    current.className = 'nj-population-now'
     current.textContent = person.movement
       ? `NOW ${clock(person.movement.startMinute)}–${clock(person.movement.endMinute)} · walking to ${person.movement.to.label}`
-      : `NOW ${clock(person.current.startMinute)}–${clock(person.current.endMinute)} · ${person.current.activity}`
+      : `NOW ${clock(person.current.startMinute)}–${clock(person.current.endMinute)} · ${activityLabel(person.current.activity)}`
     const next = document.createElement('p')
-    next.textContent = `NEXT ${clock(person.next.startMinute)} · ${person.next.activity}`
+    next.textContent = `NEXT ${clock(person.next.startMinute)} · ${activityLabel(person.next.activity)}`
     const daily = document.createElement('ol')
     const today = person.week.days.find((day) => day.localDate === person.localDate)
     for (const episode of today?.episodes ?? []) {
       const row = document.createElement('li')
-      row.textContent = `${clock(episode.startMinute)} ${episode.activity}`
+      row.textContent = `${clock(episode.startMinute)} ${activityLabel(episode.activity)}`
       daily.append(row)
     }
     const assignments = document.createElement('dl')
@@ -248,10 +264,8 @@ export class NpcPopulation {
       const view = document.createElement('button')
       view.type = 'button'
       view.className = 'nj-population-view'
-      view.textContent = 'VIEW NPC IN CITY'
-      view.addEventListener('click', () => {
-        this.focusNpc(person.npcId)
-      })
+      view.textContent = 'CENTER ON LOCATION'
+      view.addEventListener('click', () => this.onFocus(person.npcId))
       this.detail.append(view)
     }
   }

@@ -131,12 +131,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-population-list { display: grid; gap: 7px; font-size: 12px; }
 .nj-population-person { display: grid; gap: 4px; width: 100%; min-height: 68px; padding: 10px 12px; color: #f4eee2; background: #17333a; border: 1px solid rgba(226, 185, 126, .45); text-align: left; }
 .nj-population-person:hover, .nj-population-person:focus-visible { background: #285057; border-color: #efc88f; }
+.nj-population-person[aria-pressed="true"] { background: #285057; border-color: #efc88f; }
 .nj-population-person strong { color: #f5dfbb; font-size: 13px; }
 .nj-population-person span { line-height: 1.35; }
 .nj-population-person small { color: #a8c8bb; font-size: 10px; }
-.nj-population-detail { margin-top: 16px; padding: 12px; background: #10272c; border: 1px solid #789389; }
+.nj-population-detail { margin: 0 0 18px; padding: 12px; background: #10272c; border: 1px solid #d6ad75; }
 .nj-population-detail h3 { margin-top: 0; }
 .nj-population-detail p, .nj-population-detail li { margin: 5px 0; color: #d1dfd5; font-size: 11px; line-height: 1.45; }
+.nj-population-detail .nj-population-now { padding: 9px 10px; color: #f5dfbb; background: #214148; border-left: 3px solid #edc78f; font-size: 13px; font-weight: 700; }
 .nj-population-detail ol { max-height: 145px; overflow-y: auto; padding-left: 22px; }
 .nj-population-assignments { display: grid; grid-template-columns: 72px 1fr; gap: 6px 10px; margin: 12px 0; padding: 10px 0; border-top: 1px solid #4b6968; border-bottom: 1px solid #4b6968; }
 .nj-population-assignments dt { color: #edc78f; font-size: 9px; font-weight: 800; }
