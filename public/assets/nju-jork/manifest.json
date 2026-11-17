@@ -7,6 +7,7 @@
   "tileBlocks": 512,
   "tilePixels": 256,
   "roadNetwork": "road-network.json",
+  "sidewalkNetwork": "sidewalk-network.json",
   "transitNetwork": "transit-network.json",
   "bridgeRise": 5,
   "bridgePiers": [

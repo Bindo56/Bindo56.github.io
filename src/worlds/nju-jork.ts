@@ -16,6 +16,7 @@ import { TimeManager } from './TimeManager'
 import { NpcProof } from './npcProof'
 import { NpcPopulation } from './npcPopulation'
 import { NpcPopulationFigures } from './npcPopulationFigures'
+import { SidewalkNetwork, type SidewalkData } from './sidewalkNetwork'
 import './nju-jork.css'
 
 type Zone = {
@@ -36,6 +37,7 @@ type Manifest = {
   tilePixels: number
   zones: Zone[]
   roadNetwork?: string
+  sidewalkNetwork?: string
   transitNetwork?: string
   bridgeRise?: number
   bridgePiers?: [number, number, number][]
@@ -168,6 +170,7 @@ let zone: Zone
 let zoneTiles = new Set<string>()
 let zoneEpoch = 0
 let roadNetwork: RoadNetwork | null = null
+let sidewalks: SidewalkNetwork | null = null
 let transitNetwork: TransitNetwork | null = null
 let activeTransit: TransitZone | undefined
 let activeStations = new Map<string, TransitNode>()
@@ -806,11 +809,14 @@ function makeTile(rx: number, rz: number, data: Uint8ClampedArray,
   const maxX = lod === 'detail' ? Math.min(width, Math.ceil((anchorX + cropRadius - originX) / step)) : width
   const minZ = lod === 'detail' ? Math.max(0, Math.floor((anchorZ - cropRadius - originZ) / step)) : 0
   const maxZ = lod === 'detail' ? Math.min(width, Math.ceil((anchorZ + cropRadius - originZ) / step)) : width
-  const rgbAt = (i: number, shade = 1): [number, number, number] => [
-    srgbToLinear(data[i * 4]) * shade,
-    srgbToLinear(data[i * 4 + 1]) * shade,
-    srgbToLinear(data[i * 4 + 2]) * shade,
-  ]
+  const rgbAt = (i: number, shade = 1): [number, number, number] => {
+    const offset = i * 4
+    // The raster has broad black intersections. The mapped road and sidewalk
+    // meshes above it provide the actual street shape and visible pavement.
+    const oldRoad = heights[i] <= .1 && data[offset] === 0 && data[offset + 1] === 0 && data[offset + 2] === 0
+    const [r, g, b] = oldRoad ? [119, 124, 120] : [data[offset], data[offset + 1], data[offset + 2]]
+    return [srgbToLinear(r) * shade, srgbToLinear(g) * shade, srgbToLinear(b) * shade]
+  }
   // Merge equal-height, equal-colour roof and street cells into rectangles.
   for (let z = minZ; z < maxZ; z++) for (let x = minX; x < maxX; x++) {
     const i = z * width + x
@@ -973,7 +979,7 @@ async function loadTile(rx: number, rz: number, epoch: number,
       top: lod === 'detail' ? Math.max(top, anchorZ - 128) : top,
       right: lod === 'detail' ? Math.min(left + manifest.tileBlocks, anchorX + 128) : left + manifest.tileBlocks,
       bottom: lod === 'detail' ? Math.min(top + manifest.tileBlocks, anchorZ + 128) : top + manifest.tileBlocks,
-    }, manifest.footpathWidthBlocks ?? 2)
+    }, manifest.footpathWidthBlocks ?? 2, sidewalks?.data.connectors ?? [], sidewalks?.data.crossings ?? [])
     const ads = streetAdsFor(data, lod, left, top, anchorX, anchorZ, treeData)
     loadedTiles.set(id, { mesh, trees, surface, ads, data, lod, anchor })
     scene.add(mesh)
@@ -1313,7 +1319,13 @@ async function loadWorld() {
       const roadResponse = await fetch(`${assetBase}${manifest.roadNetwork}`)
       if (roadResponse.ok) roadNetwork = await roadResponse.json() as RoadNetwork
     }
-    npcPopulationFigures.setRoadNodes(roadNetwork?.zones.city?.nodes ?? [], roadNetwork?.zones.city?.roads ?? [])
+    if (manifest.sidewalkNetwork) {
+      const sidewalkResponse = await fetch(`${assetBase}${manifest.sidewalkNetwork}`)
+      if (sidewalkResponse.ok) {
+        sidewalks = new SidewalkNetwork(await sidewalkResponse.json() as SidewalkData)
+        npcPopulationFigures.setSidewalkNetwork(sidewalks)
+      } else console.warn('Sidewalk network is unavailable:', sidewalkResponse.status)
+    }
     try {
       const catalogResponse = await fetch(`${assetBase}place-catalog.json`)
       if (catalogResponse.ok) {

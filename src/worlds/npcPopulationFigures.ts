@@ -1,11 +1,10 @@
 import * as THREE from 'three'
 import { loadProofCharacter, type ProofCharacter } from './npcProofCharacter'
 import type { NearbyNpc } from './npcPopulationProtocol'
-import { STATION_COLLIDERS } from './stationLandmarks'
-import { NpcRoadRouter, sampleRoute, type Road, type RoadNode, type RoadPoint, type Route } from './npcRoadRouting'
+import type { SidewalkNetwork, WalkingRoute } from './sidewalkNetwork'
 import type { NpcMovement } from './npcMovement'
 
-type Travel = { route: Route; movement: NpcMovement }
+type Travel = { route: WalkingRoute; movement: NpcMovement }
 
 function actionFor(activity: string): string {
   if (activity.includes('commute') || activity === 'errand' || activity === 'shopping') return 'walk'
@@ -28,9 +27,8 @@ export class NpcPopulationFigures {
   private readonly positions = new Map<number, THREE.Vector3>()
   private readonly orbits = new Map<number, number>()
   private readonly travel = new Map<number, Travel>()
-  private readonly roadCache = new Map<string, RoadPoint>()
-  private roadNodes: RoadPoint[] = []
-  private router: NpcRoadRouter | null = null
+  private readonly shown = new Set<number>()
+  private sidewalks: SidewalkNetwork | null = null
   private zoneId = 'city'
   private selectedId = 0
   private disposed = false
@@ -46,15 +44,13 @@ export class NpcPopulationFigures {
 
   select(npcId: number): void {
     this.selectedId = npcId
-    this.selectedRing.visible = npcId !== 0 && this.positions.has(npcId)
-    if (this.selectedRing.visible) this.selectedRing.position.copy(this.positions.get(npcId)!).setY(.04)
+    this.selectedRing.visible = npcId !== 0 && this.shown.has(npcId)
+    if (this.selectedRing.visible) this.selectedRing.position.copy(this.positions.get(npcId)!).setY(.09)
     this.onChange()
   }
 
-  setRoadNodes(nodes: RoadNode[], roads: Road[]): void {
-    this.roadNodes = nodes
-    this.router = new NpcRoadRouter(nodes, roads, (point) => this.clearOfStations(point))
-    this.roadCache.clear()
+  setSidewalkNetwork(network: SidewalkNetwork): void {
+    this.sidewalks = network
     if (this.people.size) this.setPeople([...this.people.values()])
   }
 
@@ -64,82 +60,38 @@ export class NpcPopulationFigures {
     this.onChange()
   }
 
-  private clearOfStations(point: RoadPoint): boolean {
-    return STATION_COLLIDERS.every((box) => point.x < box.minX - 1.5 || point.x > box.maxX + 1.5
-      || point.z < box.minZ - 1.5 || point.z > box.maxZ + 1.5)
-  }
-
-  private roadPosition(point: RoadPoint, placeId: string): RoadPoint {
-    const cached = this.roadCache.get(placeId)
-    if (cached) return cached
-    let best: RoadPoint = point
-    let distance = Infinity
-    for (const node of this.roadNodes) {
-      if (!this.clearOfStations(node)) continue
-      const next = (node.x - point.x) ** 2 + (node.z - point.z) ** 2
-      if (next < distance) { best = node; distance = next }
-    }
-    this.roadCache.set(placeId, best)
-    return best
-  }
-
-  private roadOrbit(point: RoadPoint): number {
-    let closest: RoadPoint | null = null
-    let distance = Infinity
-    for (const node of this.roadNodes) {
-      if (!this.clearOfStations(node)) continue
-      const next = (node.x - point.x) ** 2 + (node.z - point.z) ** 2
-      if (next < 9 || next >= distance) continue
-      closest = node
-      distance = next
-    }
-    return closest ? Math.atan2(closest.x - point.x, closest.z - point.z) : 0
-  }
-
   setPeople(people: NearbyNpc[]): void {
     if (this.disposed) return
     this.people.clear()
     for (const person of people) this.people.set(person.npcId, person)
-    for (const [id, figure] of this.figures) {
-      if (this.people.has(id)) continue
-      figure.dispose()
-      this.figures.delete(id)
-    }
+    this.shown.clear()
     for (const id of this.positions.keys()) if (!this.people.has(id)) {
       this.positions.delete(id)
       this.orbits.delete(id)
       this.travel.delete(id)
     }
-    const anchors = people.map((person) => {
-      const place = person.movement?.to ?? person
-      const point = this.roadPosition(place, person.movement?.to.id ?? person.placeId)
-      return { person, point, orbit: this.roadOrbit(point), key: `${point.x},${point.z}` }
-    })
-    const totals = new Map<string, number>()
-    const used = new Map<string, number>()
-    for (const { key } of anchors) totals.set(key, (totals.get(key) ?? 0) + 1)
-    for (const { person, point, orbit, key } of anchors) {
-      const rank = used.get(key) ?? 0
-      used.set(key, rank + 1)
-      const count = totals.get(key)!
-      const side = count > 1 ? (rank % 2 ? .8 : -.8) : 0
-      const along = (Math.floor(rank / 2) - (Math.ceil(count / 2) - 1) / 2) * 1.5
-      let position = new THREE.Vector3(
-        point.x + Math.sin(orbit) * along + Math.cos(orbit) * side,
-        .02,
-        point.z + Math.cos(orbit) * along - Math.sin(orbit) * side)
+    for (const person of people) {
+      // An assigned home, office, school, shop, or cafe is indoors. Keep its data
+      // and camera target, but do not put its person on the street.
+      let position = new THREE.Vector3(person.x, .02, person.z)
       const movement = person.movement
-      const route = movement ? this.router?.route(movement.from, movement.to) : null
-      if (movement && route && route.totalLength > 0) {
+      const route = movement && this.sidewalks
+        ? this.sidewalks.route(movement.from.anchor_id, movement.to.anchor_id) : null
+      if (movement && route && route.length > 0) {
         this.travel.set(person.npcId, { route, movement })
         position = this.travelPosition(person.npcId, route, movement, movement.observedAtMs)
-      } else this.travel.delete(person.npcId)
-      this.positions.set(person.npcId, position)
-      if (person.npcId === this.selectedId) {
-        this.selectedRing.visible = true
-        this.selectedRing.position.copy(position).setY(.04)
+        this.shown.add(person.npcId)
+      } else {
+        this.travel.delete(person.npcId)
+        if (this.sidewalks && (person.placeKind === 'park_access' || person.placeKind === 'station_access')) {
+          const point = this.sidewalks.snap(person.x, person.z)
+          position.set(point.x, .09, point.z)
+          this.shown.add(person.npcId)
+        }
       }
-      if (!this.travel.has(person.npcId)) this.orbits.set(person.npcId, orbit)
+      this.positions.set(person.npcId, position)
+      if (!this.shown.has(person.npcId)) continue
+      if (!this.travel.has(person.npcId)) this.orbits.set(person.npcId, 0)
       const figure = this.figures.get(person.npcId)
       if (figure) {
         figure.group.position.copy(position)
@@ -149,7 +101,7 @@ export class NpcPopulationFigures {
         // Jose Campbell is variant zero in the proof. All other people use their stable appearance seed.
         const variant = person.npcId === 37669 ? 0 : person.appearanceSeed
         void loadProofCharacter(variant).then((character) => {
-          if (this.disposed || !this.people.has(person.npcId)) { character.dispose(); return }
+          if (this.disposed || !this.shown.has(person.npcId)) { character.dispose(); return }
           character.group.name = `city-npc-${person.npcId}`
           character.group.userData.npcId = person.npcId
           character.group.position.copy(this.positions.get(person.npcId)!)
@@ -162,6 +114,12 @@ export class NpcPopulationFigures {
         }).finally(() => { this.pending.delete(person.npcId) })
       }
     }
+    for (const [id, figure] of this.figures) if (!this.shown.has(id)) {
+      figure.dispose()
+      this.figures.delete(id)
+    }
+    this.selectedRing.visible = this.shown.has(this.selectedId)
+    if (this.selectedRing.visible) this.selectedRing.position.copy(this.positions.get(this.selectedId)!).setY(.09)
     this.onChange()
   }
 
@@ -177,18 +135,18 @@ export class NpcPopulationFigures {
     const travel = this.travel.get(npcId)
     if (!travel) return actionFor(activity)
     const seconds = (travel.movement.endMinute - travel.movement.startMinute) * 60
-    return seconds > 0 && travel.route.totalLength / seconds > 1.1 ? 'run' : 'walk'
+    return seconds > 0 && travel.route.length / seconds > 1.1 ? 'run' : 'walk'
   }
 
-  private travelPosition(npcId: number, route: Route, movement: NpcMovement, worldTimeMs: number): THREE.Vector3 {
+  private travelPosition(npcId: number, route: WalkingRoute, movement: NpcMovement, worldTimeMs: number): THREE.Vector3 {
     const durationMs = (movement.endMinute - movement.startMinute) * 60000
     const progress = Math.max(0, Math.min(1,
       movement.progress + (worldTimeMs - movement.observedAtMs) / durationMs))
-    const point = sampleRoute(route, progress)
-    this.orbits.set(npcId, point.heading)
-    const side = ((npcId % 5) - 2) * .22
-    return new THREE.Vector3(point.x + Math.cos(point.heading) * side, .02,
-      point.z - Math.sin(point.heading) * side)
+    const point = this.sidewalks!.sample(route, progress)
+    const next = this.sidewalks!.sample(route, Math.min(1, progress + .001))
+    const previous = this.sidewalks!.sample(route, Math.max(0, progress - .001))
+    this.orbits.set(npcId, Math.atan2(next.x - previous.x, next.z - previous.z))
+    return new THREE.Vector3(point.x, .09, point.z)
   }
 
   pick(camera: THREE.Camera, x: number, y: number): number | null {
@@ -222,7 +180,7 @@ export class NpcPopulationFigures {
         figure.group.position.copy(position)
         figure.group.rotation.y = this.orbits.get(id) ?? 0
         this.positions.set(id, position)
-        if (id === this.selectedId) this.selectedRing.position.copy(position).setY(.04)
+        if (id === this.selectedId) this.selectedRing.position.copy(position).setY(.09)
       }
       const position = figure.group.position
       const visible = Math.hypot(position.x - focus.x, position.z - focus.z) < radius

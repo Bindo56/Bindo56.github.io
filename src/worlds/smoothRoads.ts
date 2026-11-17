@@ -13,12 +13,16 @@ type SurfaceGeometry = { positions: number[]; indices: number[] }
 // The road planes sit only a few centimetres above the voxel ground. Offset their
 // depth and draw them after the tile so the two surfaces do not shimmer at distance.
 const roadMaterial = new THREE.MeshBasicMaterial({
-  color: 0x000000, side: THREE.DoubleSide, fog: true,
+  color: 0x242a2b, side: THREE.DoubleSide, fog: true,
   depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
 })
 const footpathMaterial = new THREE.MeshBasicMaterial({
-  color: 0x969696, side: THREE.DoubleSide, fog: true,
+  color: 0xd1cbb9, side: THREE.DoubleSide, fog: true,
   depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4,
+})
+const crossingMaterial = new THREE.MeshBasicMaterial({
+  color: 0xe9e3d2, side: THREE.DoubleSide, fog: true,
+  depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -10,
 })
 const ROUND_STEPS = 12
 
@@ -60,11 +64,14 @@ function mesh(out: SurfaceGeometry, material: THREE.Material, name: string) {
 }
 
 /** Smooth carriageways and grey footpaths over the block raster at loaded zoom levels. */
-export function buildSmoothRoads(roads: SurfaceRoad[], bounds: Bounds, footpathWidth: number): THREE.Group {
+export function buildSmoothRoads(roads: SurfaceRoad[], bounds: Bounds, footpathWidth: number,
+  entrances: [number, number, number, number][] = [],
+  crossings: [number, number, number, number][] = []): THREE.Group {
   const group = new THREE.Group()
   group.name = 'Smooth road surfaces'
   const black: SurfaceGeometry = { positions: [], indices: [] }
   const grey: SurfaceGeometry = { positions: [], indices: [] }
+  const pale: SurfaceGeometry = { positions: [], indices: [] }
   for (const road of roads) {
     if (road.bridge || !road.width || road.points.length < 2) continue
     const roadRadius = road.width / 2
@@ -73,22 +80,33 @@ export function buildSmoothRoads(roads: SurfaceRoad[], bounds: Bounds, footpathW
       const [ax, az] = road.points[i - 1]
       const [bx, bz] = road.points[i]
       if (!overlaps(ax, az, bx, bz, walkRadius, bounds)) continue
-      if (road.sidewalk) {
-        quad(grey, ax, az, bx, bz, walkRadius, .045)
-        roundJoin(grey, ax, az, walkRadius, .045)
-        roundJoin(grey, bx, bz, walkRadius, .045)
-      }
+      quad(grey, ax, az, bx, bz, walkRadius, .045)
+      roundJoin(grey, ax, az, walkRadius, .045)
+      roundJoin(grey, bx, bz, walkRadius, .045)
       quad(black, ax, az, bx, bz, roadRadius, .065)
       roundJoin(black, ax, az, roadRadius, .065)
       roundJoin(black, bx, bz, roadRadius, .065)
     }
   }
+  for (const [ex, ez, sx, sz] of entrances) {
+    if (!overlaps(ex, ez, sx, sz, .65, bounds)) continue
+    quad(grey, ex, ez, sx, sz, .65, .047)
+    roundJoin(grey, ex, ez, .65, .047)
+    roundJoin(grey, sx, sz, .65, .047)
+  }
+  for (const [sx, sz, jx, jz] of crossings) {
+    if (!overlaps(sx, sz, jx, jz, .42, bounds)) continue
+    quad(pale, sx, sz, jx, jz, .42, .078)
+  }
   const footpaths = mesh(grey, footpathMaterial, 'Smooth grey footpaths')
   const carriageways = mesh(black, roadMaterial, 'Smooth black carriageways')
+  const crossingsMesh = mesh(pale, crossingMaterial, 'Sidewalk crossings')
   if (footpaths) footpaths.renderOrder = 1
   if (carriageways) carriageways.renderOrder = 2
+  if (crossingsMesh) crossingsMesh.renderOrder = 3
   if (footpaths) group.add(footpaths)
   if (carriageways) group.add(carriageways)
+  if (crossingsMesh) group.add(crossingsMesh)
   return group
 }
 

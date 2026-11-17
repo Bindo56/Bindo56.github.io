@@ -53,7 +53,7 @@ export class NpcPopulation {
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
-      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to them. Nearby characters follow mapped streets between their assigned places. Tasks follow this browser’s city clock.</p>
+      <h3>Near the camera</h3><p class="nj-population-note">Select a person to zoom to their location. People inside homes, offices, schools, shops, and cafes stay in their buildings. Walking characters use sidewalks and entrances. Tasks follow this browser’s city clock.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>
       <div class="nj-population-detail" hidden></div>`
     root.querySelector('.nj-ui')!.append(this.panel)
@@ -202,7 +202,9 @@ export class NpcPopulation {
       const name = document.createElement('strong')
       name.textContent = person.name
       const activity = document.createElement('span')
-      activity.textContent = person.movement ? person.activity : `${person.activity} · ${person.placeLabel}`
+      const indoors = !person.movement && person.placeKind !== 'park_access' && person.placeKind !== 'station_access'
+      activity.textContent = person.movement ? person.activity
+        : `${person.activity}${indoors ? ' indoors' : ''} · ${person.placeLabel}`
       const role = document.createElement('small')
       role.textContent = `${person.role.toUpperCase()} · ${Math.round(person.distance)} blocks away`
       button.append(name, activity, role)

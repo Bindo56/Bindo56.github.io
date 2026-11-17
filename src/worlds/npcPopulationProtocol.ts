@@ -14,6 +14,7 @@ export type NearbyNpc = {
   activity: string
   placeId: string
   placeLabel: string
+  placeKind: string
   x: number
   z: number
   distance: number

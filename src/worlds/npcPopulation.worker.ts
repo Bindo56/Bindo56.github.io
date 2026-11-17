@@ -273,7 +273,8 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
       return { npcId: member.npc_id, name: member.display_name, role: member.role,
         appearanceSeed: member.appearance_seed,
         activity: state.movement ? `walking to ${state.movement.to.label}` : state.current.activity,
-        placeId: place.id, placeLabel: place.label, movement: state.movement,
+        placeId: place.id, placeLabel: place.label, placeKind: place.kind,
+        movement: state.movement,
         x, z, distance }
     }
     for (const rows of active.values()) for (const member of rows) {

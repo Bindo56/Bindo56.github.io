@@ -1,6 +1,6 @@
 import type { NpcEpisode } from '../../server/population/weekly-core.mjs'
 
-export type NpcPlacePoint = { id: string; label: string; x: number; z: number }
+export type NpcPlacePoint = { id: string; anchor_id: string; label: string; x: number; z: number }
 export type NpcMovement = {
   from: NpcPlacePoint
   to: NpcPlacePoint
