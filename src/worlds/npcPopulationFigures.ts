@@ -7,7 +7,8 @@ import type { NpcMovement } from './npcMovement'
 type Travel = { route: WalkingRoute; movement: NpcMovement }
 
 function actionFor(activity: string): string {
-  if (activity.includes('commute') || activity === 'errand' || activity === 'shopping') return 'walk'
+  if (activity.includes('commute') || activity === 'errand' || activity === 'shopping'
+    || activity === 'street_stroll') return 'walk'
   if (activity === 'work' || activity === 'school' || activity === 'study') return 'work'
   if (activity === 'social_meeting') return 'talk'
   return 'idle'
@@ -83,7 +84,7 @@ export class NpcPopulationFigures {
         this.shown.add(person.npcId)
       } else {
         this.travel.delete(person.npcId)
-        if (this.sidewalks && (person.placeKind === 'park_access' || person.placeKind === 'station_access')) {
+        if (this.sidewalks && person.outdoor) {
           const point = this.sidewalks.snap(person.x, person.z)
           position.set(point.x, .09, point.z)
           this.shown.add(person.npcId)

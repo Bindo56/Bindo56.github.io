@@ -67,9 +67,12 @@ export function fillDay(member, weekday) {
   if (work) {
     const depart = work.start - member.commute_minute
     items.push(segment(depart, work.start, 'commute_to_work', member.work_place_id, 'Scheduled shift'))
-    const breakStart = Math.round((work.start + work.end) / 2) - 15
+    const breakStart = Math.max(work.start + 90, Math.min(work.end - 60,
+      Math.round((work.start + work.end) / 2) - 15 + (mix(member.plan_seed, weekday, 0xb18) % 91) - 45))
+    const outdoorBreak = mix(member.plan_seed, weekday, 0xb47) % 2 === 0
     items.push(segment(work.start, breakStart, member.shift_pattern === 'school' ? 'school' : 'work', member.work_place_id, 'Scheduled commitment'))
-    items.push(segment(breakStart, breakStart + 30, 'meal_break', member.work_place_id, 'Mid-shift break'))
+    items.push(segment(breakStart, breakStart + 30, outdoorBreak ? 'outdoor_break' : 'meal_break',
+      outdoorBreak ? member.cafe_place_id : member.work_place_id, 'Mid-shift break'))
     items.push(segment(breakStart + 30, work.end, member.shift_pattern === 'school' ? 'school' : 'work', member.work_place_id, 'Scheduled commitment'))
     items.push(segment(work.end, work.end + member.commute_minute, 'commute_home', member.home_place_id, 'Returning home'))
     const freeAt = work.end + member.commute_minute + 45
@@ -98,7 +101,24 @@ export function fillDay(member, weekday) {
     cursor = item.endMinute
   }
   if (cursor < 1440) complete.push(segment(cursor, 1440, 'home', member.home_place_id, 'Uncommitted time'))
-  return complete
+  const withWalks = []
+  for (const item of complete) {
+    const duration = 30 + mix(member.plan_seed, weekday, item.startMinute ^ 0x51a) % 21
+    const earliest = Math.max(item.startMinute + 15, 8 * 60)
+    const latest = Math.min(item.endMinute - 15, bedtime - 20)
+    if (item.activity !== 'home' || latest - earliest < duration
+      || mix(member.plan_seed, weekday, item.startMinute ^ 0x72d) % 3 === 0) {
+      withWalks.push(item)
+      continue
+    }
+    const start = earliest + mix(member.plan_seed, weekday, item.startMinute ^ 0x1fa)
+      % (latest - earliest - duration + 1)
+    if (item.startMinute < start) withWalks.push({ ...item, endMinute: start })
+    withWalks.push(segment(start, start + duration, 'street_stroll', member.leisure_place_id,
+      'A walk through the neighborhood'))
+    if (start + duration < item.endMinute) withWalks.push({ ...item, startMinute: start + duration })
+  }
+  return withWalks
 }
 
 export function overlayMeeting(day, meeting) {

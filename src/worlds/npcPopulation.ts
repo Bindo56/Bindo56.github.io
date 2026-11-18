@@ -12,7 +12,8 @@ function activityLabel(activity: string): string {
     sleep: 'Sleeping at home', home: 'At home', work: 'Working', school: 'In class',
     meal_break: 'Taking a meal break', cafe_visit: 'Visiting a cafe',
     errand: 'Running an errand', leisure: 'Enjoying free time',
-    social_meeting: 'Meeting someone',
+    social_meeting: 'Meeting someone', outdoor_break: 'Taking an outdoor break',
+    street_stroll: 'Walking around the neighborhood',
   }
   return labels[activity] ?? activity.replaceAll('_', ' ')
 }
@@ -172,7 +173,7 @@ export class NpcPopulation {
     this.lastQuery = now
     this.requestId++
     this.post({ type: 'nearby', requestId: this.requestId, x, z,
-      radius: Math.max(110, Math.min(420, viewHeight * 1.5)), limit: 12, timeMs: this.timeMs(),
+      radius: Math.max(135, Math.min(420, viewHeight * 1.5)), limit: 48, timeMs: this.timeMs(),
       followId: this.followingId || undefined })
     if (this.selectedId) this.inspect(this.selectedId)
   }
@@ -207,7 +208,17 @@ export class NpcPopulation {
       this.list.textContent = 'No assigned NPC places are near this camera position. Pan toward mapped buildings.'
       return
     }
+    const street = people.filter((person) => person.outdoor).slice(0, 8)
+    const indoor = people.filter((person) => !person.outdoor).slice(0, 4)
+    const listed = [...street, ...indoor]
     for (const person of people) {
+      if (listed.length >= 12) break
+      if (!listed.some((item) => item.npcId === person.npcId)) listed.push(person)
+    }
+    const selected = people.find((person) => person.npcId === this.selectedId)
+    if (selected && !listed.some((person) => person.npcId === selected.npcId)) listed.push(selected)
+    listed.sort((a, b) => a.distance - b.distance || a.npcId - b.npcId)
+    for (const person of listed) {
       const button = document.createElement('button')
       button.type = 'button'
       button.className = 'nj-population-person'
@@ -217,7 +228,7 @@ export class NpcPopulation {
       const name = document.createElement('strong')
       name.textContent = person.name
       const activity = document.createElement('span')
-      const indoors = !person.movement && person.placeKind !== 'park_access' && person.placeKind !== 'station_access'
+      const indoors = !person.outdoor
       activity.textContent = person.movement ? person.activity
         : `${person.activity}${indoors ? ' indoors' : ''} · ${person.placeLabel}`
       const role = document.createElement('small')

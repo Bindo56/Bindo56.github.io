@@ -21,9 +21,10 @@ export function movementFor(
   const from = getPlace(previous.placeId)
   const to = getPlace(current.placeId)
   if (!from || !to || Math.hypot(from.x - to.x, from.z - to.z) < 1) return null
-  const explicitCommute = current.activity.startsWith('commute_')
+  const fullLeg = current.activity.startsWith('commute_')
+    || current.activity === 'outdoor_break' || current.activity === 'street_stroll'
   const startMinute = current.startMinute
-  const endMinute = explicitCommute
+  const endMinute = fullLeg
     ? current.endMinute
     : Math.min(current.endMinute, startMinute + Math.min(15, Math.max(3, (current.endMinute - startMinute) / 4)))
   if (minute < startMinute || minute >= endMinute || endMinute <= startMinute) return null

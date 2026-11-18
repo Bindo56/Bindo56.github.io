@@ -12,7 +12,7 @@ type MeetingTuple = [string, string, number, number, string, number, number, num
 type StoredMember = NpcMember & { meetings: MeetingTuple[] }
 type Place = { id: string; anchor_id: string; kind: string; label: string; x: number; z: number }
 
-const MAX_ACTIVE_SHARDS = 3
+const MAX_ACTIVE_SHARDS = 5
 let baseUrl = ''
 let manifest: Manifest | null = null
 let cached = false
@@ -270,10 +270,13 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
         ? state.movement.from.z + (state.movement.to.z - state.movement.from.z) * state.movement.progress : place.z
       const distance = Math.hypot(x - message.x, z - message.z)
       if (!allowOutside && distance > message.radius) return null
+      const outdoor = !!state.movement || state.current.activity === 'outdoor_break'
+        || state.current.activity === 'street_stroll'
+        || place.kind === 'park_access' || place.kind === 'station_access'
       return { npcId: member.npc_id, name: member.display_name, role: member.role,
         appearanceSeed: member.appearance_seed,
         activity: state.movement ? `walking to ${state.movement.to.label}` : state.current.activity,
-        placeId: place.id, placeLabel: place.label, placeKind: place.kind,
+        placeId: place.id, placeLabel: place.label, placeKind: place.kind, outdoor,
         movement: state.movement,
         x, z, distance }
     }
@@ -282,7 +285,11 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
       if (person) people.push(person)
     }
     people.sort((a, b) => a.distance - b.distance || a.npcId - b.npcId)
-    const visible = people.slice(0, message.limit)
+    // Reserve most of the nearby budget for scheduled pedestrians. The closest
+    // indoor residents remain available in the panel without filling every slot.
+    const street = people.filter((person) => person.outdoor).slice(0, Math.max(0, message.limit - 12))
+    const indoor = people.filter((person) => !person.outdoor).slice(0, Math.min(12, message.limit - street.length))
+    const visible = [...street, ...indoor]
     if (message.followId && !visible.some((person) => person.npcId === message.followId)) {
       const member = selectedMember?.npc_id === message.followId ? selectedMember : memberById(message.followId)
       const selected = member ? personAt(member, true) : null
@@ -291,6 +298,7 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
         visible.push(selected)
       }
     }
+    visible.sort((a, b) => a.distance - b.distance || a.npcId - b.npcId)
     send({ type: 'nearby', requestId: message.requestId, people: visible })
   } catch (error) {
     send({ type: 'error', message: error instanceof Error ? error.message : String(error), initial: false })

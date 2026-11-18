@@ -15,6 +15,7 @@ export type NearbyNpc = {
   placeId: string
   placeLabel: string
   placeKind: string
+  outdoor: boolean
   x: number
   z: number
   distance: number
