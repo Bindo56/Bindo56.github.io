@@ -14,7 +14,7 @@ type Curve = { path: string; keys: number[][] }
 type Clip = { duration: number; rotation: Curve[]; position: Curve[]; visibility: Curve[] }
 type AnimationFile = { clips: Record<string, Clip> }
 type Assets = { variants: THREE.Object3D[]; clips: Record<string, Clip>; material: THREE.MeshBasicMaterial }
-export type ProofCrowdAssets = { geometries: THREE.BufferGeometry[]; material: THREE.MeshBasicMaterial }
+export type ProofCrowdAssets = { geometries: THREE.BufferGeometry[]; material: THREE.MeshBasicMaterial; walkDuration: number }
 type Pose = { position: THREE.Vector3; quaternion: THREE.Quaternion; visible: boolean }
 type NodeState = { object: THREE.Object3D; base: Pose }
 type ActionDef = { clip: string; speed: number; pingPong?: boolean; upperBodyOnly?: boolean }
@@ -79,44 +79,73 @@ function loadAssets(): Promise<Assets> {
   return cachedAssets
 }
 
-/** Flatten the actual 100 People FBX variants for inexpensive crowd instancing. */
+/** Bake the supplied FBX walk clip into four poses for individually animated instances. */
 export function loadProofCrowdAssets(): Promise<ProofCrowdAssets> {
   if (!cachedCrowdAssets) cachedCrowdAssets = loadAssets().then((assets) => {
     const geometries = assets.variants.map((source) => {
       const model = source.clone(true)
       model.position.set(0, 0, 0) // Match the detailed character's position and scale.
+      const nodes = indexNodes(model)
+      const setPose = (clip: Clip, action: ActionDef, elapsed: number) => {
+        const pose = applyClipPose(nodes, clip, action, elapsed)
+        for (const [path, state] of nodes) {
+          if (!path) continue
+          state.object.position.copy(pose.get(path)!.position)
+          state.object.quaternion.copy(pose.get(path)!.quaternion)
+        }
+        model.updateMatrixWorld(true)
+      }
+      setPose(assets.clips.idle, actions.idle, 0)
       model.updateMatrixWorld(true)
       const bounds = new THREE.Box3().setFromObject(model)
       const height = bounds.getSize(new THREE.Vector3()).y
       if (!Number.isFinite(height) || height <= 0) throw new Error(`Invalid crowd variant ${source.name}`)
       const scale = BODY_HEIGHT / height
-      const positions: number[] = []
-      const uvs: number[] = []
+      const centerX = (bounds.min.x + bounds.max.x) / 2
+      const centerZ = (bounds.min.z + bounds.max.z) / 2
       const vertex = new THREE.Vector3()
+      const visibleMeshes: THREE.Mesh[] = []
       model.traverseVisible((object) => {
-        if (!(object instanceof THREE.Mesh)) return
-        const geometry = object.geometry
-        const position = geometry.getAttribute('position')
-        if (!position) return
-        const uv = geometry.getAttribute('uv')
-        const indices = geometry.getIndex()
-        const count = indices?.count ?? position.count
-        for (let point = 0; point < count; point++) {
-          const index = indices?.getX(point) ?? point
-          vertex.set(position.getX(index), position.getY(index), position.getZ(index))
-            .applyMatrix4(object.matrixWorld)
-          positions.push(vertex.x * scale, (vertex.y - bounds.min.y) * scale, vertex.z * scale)
-          uvs.push(uv?.getX(index) ?? 0, uv?.getY(index) ?? 0)
-        }
+        if (object instanceof THREE.Mesh) visibleMeshes.push(object)
       })
+      const readPose = (withUvs: boolean) => {
+        const positions: number[] = []
+        const uvs: number[] = []
+        for (const object of visibleMeshes) {
+          const geometry = object.geometry
+          const position = geometry.getAttribute('position')
+          if (!position) continue
+          const uv = geometry.getAttribute('uv')
+          const indices = geometry.getIndex()
+          const count = indices?.count ?? position.count
+          for (let point = 0; point < count; point++) {
+            const index = indices?.getX(point) ?? point
+            vertex.set(position.getX(index), position.getY(index), position.getZ(index))
+              .applyMatrix4(object.matrixWorld)
+            positions.push((vertex.x - centerX) * scale, (vertex.y - bounds.min.y) * scale,
+              (vertex.z - centerZ) * scale)
+            if (withUvs) uvs.push(uv?.getX(index) ?? 0, uv?.getY(index) ?? 0)
+          }
+        }
+        return { positions, uvs }
+      }
+      const { positions, uvs } = readPose(true)
       if (!positions.length) throw new Error(`Crowd variant ${source.name} has no visible geometry`)
       const geometry = new THREE.BufferGeometry()
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+      for (let frame = 0; frame < 4; frame++) {
+        setPose(assets.clips.walk, actions.walk, assets.clips.walk.duration * frame / 4)
+        const walkPositions = readPose(false).positions
+        if (walkPositions.length !== positions.length) throw new Error(`Crowd variant ${source.name} changed geometry during walk`)
+        geometry.morphAttributes.position ??= []
+        geometry.morphAttributes.position.push(new THREE.Float32BufferAttribute(walkPositions, 3))
+      }
       geometry.computeBoundingSphere()
+      if (geometry.boundingSphere) geometry.boundingSphere.radius += .25
       return geometry
     })
-    return { geometries, material: assets.material }
+    return { geometries, material: assets.material, walkDuration: assets.clips.walk.duration }
   }).catch((error) => {
     cachedCrowdAssets = undefined
     throw error
@@ -210,7 +239,8 @@ export async function loadProofCharacter(variantIndex = 0): Promise<ProofCharact
   const height = bounds.getSize(new THREE.Vector3()).y
   if (!Number.isFinite(height) || height <= 0) throw new Error(`Invalid character dimensions for ${model.name}`)
   // Put the feet at the group's origin before scaling to the city's 3 m blocks.
-  model.position.y -= bounds.min.y
+  model.position.set(-(bounds.min.x + bounds.max.x) / 2, -bounds.min.y,
+    -(bounds.min.z + bounds.max.z) / 2)
   group.scale.setScalar(BODY_HEIGHT / height)
   group.userData.variant = model.name
 

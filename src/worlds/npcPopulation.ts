@@ -251,7 +251,7 @@ export class NpcPopulation {
     const summary = document.createElement('p')
     const destination = person.current.activity === 'tourist_visit'
       ? person.currentPlace : person.movement?.to.label
-    summary.textContent = `${person.role.toUpperCase()} · ${person.localDate} · ${person.movement
+    summary.textContent = `NPC #${person.npcId} · ${person.role.toUpperCase()} · ${person.localDate} · ${person.movement
       ? `${person.movement.from.label} → ${destination}` : person.currentPlace}`
     const current = document.createElement('p')
     current.className = 'nj-population-now'

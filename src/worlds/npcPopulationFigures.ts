@@ -33,6 +33,7 @@ export class NpcPopulationFigures {
   private readonly wander = new Map<number, WalkingRoute>()
   private readonly wanderPlace = new Map<number, string>()
   private readonly shown = new Set<number>()
+  private readonly rendered = new Set<number>()
   private readonly detailIds = new Set<number>()
   private sidewalks: SidewalkNetwork | null = null
   private worldTimeMs = 0
@@ -97,7 +98,8 @@ export class NpcPopulationFigures {
         this.travel.delete(person.npcId)
         if (this.sidewalks && person.outdoor) {
           const roaming = person.activity === 'tourist_visit' || person.placeKind === 'park_access'
-            || person.activity === 'outdoor_break'
+            || person.placeKind === 'station_access' || person.activity === 'outdoor_break'
+            || person.activity === 'street_stroll'
           if (roaming) {
             let walk = this.wanderPlace.get(person.npcId) === person.placeId
               ? this.wander.get(person.npcId) : undefined
@@ -189,7 +191,8 @@ export class NpcPopulationFigures {
     const next = this.sidewalks!.sample(route, Math.min(1, progress + .001))
     const previous = this.sidewalks!.sample(route, Math.max(0, progress - .001))
     this.orbits.set(npcId, Math.atan2(next.x - previous.x, next.z - previous.z))
-    return new THREE.Vector3(point.x, .09, point.z)
+    const sidewalk = this.sidewalks!.snap(point.x, point.z)
+    return new THREE.Vector3(sidewalk.x, .09, sidewalk.z)
   }
 
   private wanderPosition(npcId: number, route: WalkingRoute, worldTimeMs: number): THREE.Vector3 {
@@ -216,7 +219,20 @@ export class NpcPopulationFigures {
         object = object.parent
       }
     }
-    return null
+    // Instanced morph poses move limbs away from the geometry's base pose. Keep
+    // the whole person clickable even when an exact triangle ray misses a limb.
+    const center = new THREE.Vector3(), closest = new THREE.Vector3()
+    let best: { id: number; distance: number } | null = null
+    for (const id of this.rendered) {
+      const position = this.positions.get(id)
+      if (!position) continue
+      center.set(position.x, position.y + .25, position.z)
+      ray.ray.closestPointToPoint(center, closest)
+      if (closest.distanceToSquared(center) > .32 ** 2) continue
+      const distance = ray.ray.origin.distanceToSquared(center)
+      if (!best || distance < best.distance) best = { id, distance }
+    }
+    return best?.id ?? null
   }
 
   update(dt: number, viewHeight: number, focus: THREE.Vector3, worldTimeMs: number): boolean {
@@ -229,6 +245,7 @@ export class NpcPopulationFigures {
     if (!enabled) return false
     let changed = false
     const radius = Math.max(65, viewHeight * 1.5)
+    this.rendered.clear()
     for (const [id, travel] of this.travel)
       this.positions.set(id, this.travelPosition(id, travel.route, travel.movement, worldTimeMs))
     for (const [id, route] of this.wander) if (!this.travel.has(id))
@@ -238,10 +255,12 @@ export class NpcPopulationFigures {
       if (this.figures.has(id)) continue
       const position = this.positions.get(id)!, person = this.people.get(id)!
       if (Math.hypot(position.x - focus.x, position.z - focus.z) >= radius) continue
+      this.rendered.add(id)
       distant.push({ npcId: id, appearanceSeed: person.appearanceSeed,
-        x: position.x, y: position.y, z: position.z, heading: this.orbits.get(id) ?? 0 })
+        x: position.x, y: position.y, z: position.z, heading: this.orbits.get(id) ?? 0,
+        walking: this.travel.has(id) || this.wander.has(id) })
     }
-    this.crowd.update(distant)
+    this.crowd.update(distant, dt)
     if (this.shown.has(this.selectedId)) this.selectedRing.position.copy(this.positions.get(this.selectedId)!).setY(.09)
     for (const [id, figure] of this.figures) {
       const position = this.positions.get(id)!
@@ -253,6 +272,7 @@ export class NpcPopulationFigures {
         changed = true
       }
       if (visible) {
+        this.rendered.add(id)
         figure.update(dt)
         changed = true
       }
