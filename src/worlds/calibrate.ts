@@ -24,7 +24,7 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
 <div class="cal">
   <header class="cal-bar">
-    <a href="./">← EARTH SIM (NEW YORK)</a>
+    <a href="../ambient-npcs/">← AMBIENT NPCs</a>
     <h1>Map calibration</h1>
     <div class="cal-stats" id="cal-stats">Loading…</div>
     <button type="button" class="cal-btn" id="cal-save" disabled>Save points</button>

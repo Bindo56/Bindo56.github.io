@@ -13,6 +13,7 @@ export default defineConfig({
         ['main', 'index.html'],
         ...PLANET_SLUGS.map((slug) => [slug, `worlds/${slug}/index.html`]),
         ['clockworkCity', 'worlds/clockwork-city/index.html'],
+        ['ambientNpcs', 'worlds/ambient-npcs/index.html'],
         ['trainModels', 'worlds/train-models/index.html'],
         ['classic', 'classic/index.html'],
       ]),

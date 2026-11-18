@@ -53,9 +53,9 @@ export const planetDefinitions = [
   },
   {
     slug: 'npc-ecs',
-    title: 'Earth Sim (New York)',
+    title: 'Ambient NPCs',
     projectKey: 'npc-ecs',
-    entryPath: 'worlds/clockwork-city/',
+    entryPath: 'worlds/ambient-npcs/',
     position: initialOrbitPosition(orbitDefinitions['npc-ecs']),
     orbit: orbitDefinitions['npc-ecs'],
     radius: 44,

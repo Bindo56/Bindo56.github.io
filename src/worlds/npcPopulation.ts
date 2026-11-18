@@ -59,8 +59,8 @@ export class NpcPopulation {
     this.panel = document.createElement('aside')
     this.panel.className = 'nj-population-panel'
     this.panel.hidden = true
-    this.panel.setAttribute('aria-label', 'New York Sim NPC population')
-    this.panel.innerHTML = `<div class="nj-population-heading"><div><span class="nj-eyebrow">NEW YORK SIM · ON THIS DEVICE</span><h2>100,000 NPCs</h2></div><button class="nj-population-close" type="button" aria-label="Close NPC panel">×</button></div>
+    this.panel.setAttribute('aria-label', 'Ambient NPCs population')
+    this.panel.innerHTML = `<div class="nj-population-heading"><div><span class="nj-eyebrow">AMBIENT NPCs · ON THIS DEVICE</span><h2>100,000 NPCs</h2></div><button class="nj-population-close" type="button" aria-label="Close NPC panel">×</button></div>
       <p class="nj-population-status" role="status">Preparing the population…</p>
       <progress class="nj-population-progress" value="0" max="100000" aria-label="NPCs loaded"></progress>
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
@@ -80,7 +80,7 @@ export class NpcPopulation {
     this.overlay.className = 'nj-population-loading'
     this.overlay.hidden = true
     this.overlay.setAttribute('role', 'status')
-    this.overlay.innerHTML = `<div class="nj-population-loading-card"><span class="nj-eyebrow">NEW YORK SIM</span><h2>Waking up the city</h2><p>Loading people and places around you…</p><progress value="0" max="100000" aria-label="NPC population loading"></progress><small>0 of 100,000 NPCs ready</small></div>`
+    this.overlay.innerHTML = `<div class="nj-population-loading-card"><span class="nj-eyebrow">AMBIENT NPCs</span><h2>Waking up the city</h2><p>Loading people and places around you…</p><progress value="0" max="100000" aria-label="NPC population loading"></progress><small>0 of 100,000 NPCs ready</small></div>`
     root.querySelector('.nj-ui')!.append(this.overlay)
 
     this.button.addEventListener('click', () => {

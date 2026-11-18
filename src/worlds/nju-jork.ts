@@ -8,6 +8,7 @@ import { buildElevatedRail } from './elevatedRail'
 import { buildStationLandmarks, STATION_COLLIDERS, STATION_LANDMARKS } from './stationLandmarks'
 import { resolveCameraCollision } from './cameraCollision'
 import { TransitOverlay, type TransitNetwork, type TransitNode, type TransitZone } from './transitNetwork'
+import { TransitVehicles } from './transitVehicles'
 import { buildSkyline, flattenCutouts, type Rect, type SkylineScene, type TowerDef } from './skyline'
 import { createAdAtlas, type AdAtlas } from './skyline/adArt'
 import { buildStreetAds, disposeStreetAds } from './skyline/streetAds'
@@ -57,18 +58,19 @@ const DETAIL_VIEW_HEIGHT = 55
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
-  <div class="nj-stage" aria-label="Three-dimensional New York Sim city model"></div>
+  <div class="nj-stage" aria-label="Three-dimensional Ambient NPCs New York city model"></div>
   <div class="nj-road-labels" id="nj-road-labels" aria-label="Street and building markers"></div>
   <div class="nj-ui">
     <header class="nj-topbar">
       <a href="${import.meta.env.BASE_URL}" class="nj-back">← <span>SYSTEM ZERO</span></a>
-      <span class="nj-world">EARTH SIM (NEW YORK) <b>/</b> WORLD MODEL</span>
+      <span class="nj-world">AMBIENT NPCs <b>/</b> NEW YORK SIM</span>
       <span class="nj-status" id="nj-status"><i></i> PREPARING CITY</span>
     </header>
     <section class="nj-intro" aria-labelledby="nj-title">
-      <span class="nj-eyebrow">REAL MANHATTAN · MINECRAFT BLOCKS</span>
+      <span class="nj-eyebrow">REAL MANHATTAN · LIVING WORLD</span>
       <h1 id="nj-title">NEW YORK<br><em>SIM</em></h1>
-      <p>Explore mapped homes, offices, cafes and other places in this part of Manhattan. Select MAP PLACES below to filter the view.</p>
+      <p class="nj-intro-tagline">WITH AMBIENT NPCs</p>
+      <p>World filler with 100,000 scheduled people across homes, offices, cafes, parks, and sidewalks. Click a person to follow their day.</p>
     </section>
     <div class="nj-zone-switch" id="nj-zone-switch" role="group" aria-label="World area"></div>
     <div class="nj-info" aria-live="polite">
@@ -93,7 +95,7 @@ app.innerHTML = `
       <button type="button" id="nj-overview">OVERVIEW</button>
     </div>
     <div class="nj-map-key">▣ BUILDINGS <b>·</b> STREET NAMES <b>·</b> <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color: inherit">© OPENSTREETMAP</a> <b>·</b> <a href="https://data.cityofnewyork.us/d/64uk-42ks" target="_blank" rel="noopener" style="color: inherit">NYC PLUTO</a> <b>·</b> <a href="https://data.cityofnewyork.us/d/43nn-pn8j" target="_blank" rel="noopener" style="color: inherit">NYC HEALTH</a></div>
-    <div class="nj-transit-key" id="nj-transit-key" hidden><span class="nj-key-subway">- - SUBWAY ROUTE NODES · SOLID BRIDGE RAIL</span><span class="nj-key-metro">- - METRO-NORTH ROUTE NODES</span><span>○ STATION ENTRANCES · MTA STATIC GTFS</span></div>
+    <div class="nj-transit-key" id="nj-transit-key" hidden><span class="nj-key-subway">- - SUBWAY · MOVING TRAIN MODEL · BRIDGE RAIL</span><span class="nj-key-metro">- - METRO-NORTH · MOVING TRAIN MODEL</span><span>UNDERGROUND TRAINS SHOWN AS MAP PROJECTIONS · MTA STATIC GTFS</span></div>
     <aside class="nj-place-card" id="nj-place-card" hidden aria-live="polite"></aside>
     <div class="nj-help">DRAG TO PAN <b>·</b> SCROLL OR PINCH TO ZOOM <b>·</b> SHIFT + DRAG TO ORBIT</div>
     <div class="nj-loading" id="nj-loading" role="status">READING THE CITY MODEL…</div>
@@ -136,9 +138,11 @@ const camera = new THREE.PerspectiveCamera(55, 1, .5, 12000)
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, innerWidth < 700 ? 1.25 : 1.6))
 renderer.outputColorSpace = THREE.SRGBColorSpace
-renderer.domElement.setAttribute('aria-label', 'New York Sim model. Drag to pan, scroll to zoom, Shift and drag to orbit.')
+renderer.domElement.setAttribute('aria-label', 'Ambient NPCs New York model. Drag to pan, scroll to zoom, Shift and drag to orbit.')
 stage.append(renderer.domElement)
 const transitOverlay = new TransitOverlay(stage)
+const transitVehicles = new TransitVehicles(scene)
+if (import.meta.hot) import.meta.hot.dispose(() => transitVehicles.dispose())
 
 const overviewMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false })
 const tileMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true })
@@ -1161,8 +1165,7 @@ function updateTransitControls() {
 function syncTransitQuery() {
   const url = new URL(location.href)
   const selected = subwayVisible && metroVisible ? 'both' : subwayVisible ? 'subway' : metroVisible ? 'metro' : ''
-  if (selected) url.searchParams.set('transit', selected)
-  else url.searchParams.delete('transit')
+  url.searchParams.set('transit', selected || 'off')
   history.replaceState(null, '', url)
 }
 function focusMetroRouteIfOffscreen() {
@@ -1226,6 +1229,7 @@ function frame(now: number) {
   if (moving || dirty) updateCamera()
   const proofChanged = npcProof.update(dt, viewHeight, focus)
   const populationChanged = npcPopulationFigures.update(dt, viewHeight, focus, timeManager.nowMs())
+  const trainsChanged = transitVehicles.update(dt, zone?.id === 'city', subwayVisible, metroVisible, viewHeight, focus)
   npcPopulation.update(focus.x, focus.z, viewHeight, now)
   refreshTiles(now)
   if (brooklynModel) {
@@ -1266,10 +1270,11 @@ function frame(now: number) {
   }
   if (moving || dirty) updateRoadOverlay()
   if (moving || dirty) updateMapLabels(now)
-  if (moving || dirty || proofChanged || populationChanged) {
+  if (moving || dirty || proofChanged || populationChanged || trainsChanged) {
     renderer.render(scene, camera)
-    transitOverlay.draw(activeTransit, transitNetwork?.surfaceRail ?? [], camera, subwayVisible, metroVisible, viewHeight, focus)
   }
+  if (moving || dirty)
+    transitOverlay.draw(activeTransit, transitNetwork?.surfaceRail ?? [], camera, subwayVisible, metroVisible, viewHeight, focus)
   dirty = false
 }
 requestAnimationFrame(frame)
@@ -1359,10 +1364,11 @@ async function loadWorld() {
       elevatedRailModel.visible = false
       scene.add(elevatedRailModel)
     }
+    if (transitNetwork?.zones.city) transitVehicles.configure(transitNetwork.zones.city, transitNetwork.surfaceRail ?? [])
     buildLandmarkModels()
     const requestedTransit = new URLSearchParams(location.search).get('transit')
-    subwayVisible = requestedTransit === 'subway' || requestedTransit === 'both'
-    metroVisible = requestedTransit === 'metro' || requestedTransit === 'both'
+    subwayVisible = requestedTransit === null || requestedTransit === 'subway' || requestedTransit === 'both'
+    metroVisible = requestedTransit === null || requestedTransit === 'metro' || requestedTransit === 'both'
     updateTransitControls()
     zoneSwitch.innerHTML = manifest.zones.map((item) =>
       `<button type="button" data-zone="${item.id}" aria-pressed="false">${item.name}</button>`).join('')
@@ -1419,7 +1425,8 @@ async function loadWorld() {
     })
     await activateZone(manifest.zones[0])
     if (new URLSearchParams(location.search).has('proof')) void npcProof.open()
-    if (metroVisible && !new URLSearchParams(location.search).has('view')
+    if (new URLSearchParams(location.search).get('transit') === 'metro'
+      && !new URLSearchParams(location.search).has('view')
       && !new URLSearchParams(location.search).has('x')) focusMetroRouteIfOffscreen()
   } catch (error) {
     loading.textContent = 'THE CITY MODEL COULD NOT BE LOADED.'

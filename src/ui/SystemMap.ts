@@ -187,7 +187,7 @@ export class SystemMap {
       actions.append(source)
     }
     if (project?.demo) {
-      const demo = element('a', 'system-map-source', 'Explore Earth Sim (New York) ↗')
+      const demo = element('a', 'system-map-source', 'Explore Ambient NPCs ↗')
       demo.href = project.demo
       demo.target = '_blank'
       demo.rel = 'noopener noreferrer'

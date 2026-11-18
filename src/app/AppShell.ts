@@ -30,7 +30,7 @@ const WORLD_TAGS: Record<string, string> = {
 }
 const WORLD_NOTES: Record<string, string> = {
   voxel: 'Zoom from an alien planet into six destructible voxel cities. Launch missiles, cut with lasers, and watch the shards fall.',
-  'npc-ecs': 'ECS schedules and NPC behavior, explored in Earth Sim (New York): a block model of real Manhattan.',
+  'npc-ecs': 'Ambient NPCs: scheduled people, relationships, and daily routines in a block model of real Manhattan.',
   'stretch-squash': 'A cartoon jungle where every prop stretches, squashes, and bounces back.',
   'drone-fleet': 'VR drone flight and AI simulation.',
   'event-horizon': 'Launch swarms in a gravity lab.',
@@ -698,7 +698,7 @@ export class AppShell {
     const tech = node('p', 'landing-tech', project?.tech.join('  /  ') ?? '')
     const links = node('div', 'landing-links')
     if (project?.github) links.append(sourceLink('Original source ↗', project.github))
-    if (project?.demo) links.append(sourceLink('Explore Earth Sim (New York) ↗', project.demo))
+    if (project?.demo) links.append(sourceLink('Explore Ambient NPCs ↗', project.demo))
     if (project?.video) {
       const demo = node('button', 'action-link', 'Watch original demo ↗')
       demo.type = 'button'
@@ -737,7 +737,7 @@ export class AppShell {
       controls.append(retry, back)
       const project = projects.find(item => item.key === this.loadingRoute?.projectKey)
       if (project?.github) controls.append(sourceLink('Original source ↗', project.github))
-      if (project?.demo) controls.append(sourceLink('Explore Earth Sim (New York) ↗', project.demo))
+      if (project?.demo) controls.append(sourceLink('Explore Ambient NPCs ↗', project.demo))
       this.loading.append(controls)
     }
   }
@@ -822,7 +822,7 @@ export class AppShell {
       card.append(node('h2', '', project.title), node('p', '', project.summary), node('p', 'fallback-tech', project.tech.join(' · ')))
       if (project.github) card.append(sourceLink('Original source ↗', project.github))
       if (project.video) card.append(sourceLink('Original demo ↗', project.video))
-      if (project.demo) card.append(sourceLink('Explore Earth Sim (New York) ↗', project.demo))
+      if (project.demo) card.append(sourceLink('Explore Ambient NPCs ↗', project.demo))
       if (!project.github && !project.video && !project.demo) card.append(node('span', 'archive-pending', 'Original source and demo pending'))
       grid.append(card)
     }

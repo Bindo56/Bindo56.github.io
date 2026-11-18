@@ -141,7 +141,7 @@ export class PortfolioView {
       }
       if (project.github) actions.append(outbound('Original source ↗', project.github))
       // A world that opens its own page already links there.
-      if (project.demo && !(planet && 'entryPath' in planet)) actions.append(outbound('Explore Earth Sim (New York) ↗', project.demo))
+      if (project.demo && !(planet && 'entryPath' in planet)) actions.append(outbound('Explore Ambient NPCs ↗', project.demo))
       if (project.video) {
         const demo = element('button', 'archive-link', 'Watch demo ↗')
         demo.type = 'button'

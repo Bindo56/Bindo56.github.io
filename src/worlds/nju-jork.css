@@ -74,6 +74,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid #efc88f; outline-offs
 .nj-eyebrow { color: #e8c28c; font-size: 9px; line-height: 1.5; font-weight: 700; letter-spacing: .18em; }
 .nj-intro h1 { margin: 10px 0 11px; font-family: 'Barlow Condensed', Impact, sans-serif; font-size: clamp(46px, 4.5vw, 64px); font-weight: 800; line-height: .83; letter-spacing: -.02em; }
 .nj-intro h1 em { color: #f0c587; font-style: normal; }
+.nj-intro .nj-intro-tagline { margin: 0 0 9px; color: #f0c587; font-size: 11px; font-weight: 800; letter-spacing: .12em; }
 .nj-intro p { margin: 0; max-width: 26ch; color: #d7e1d7; font-size: 12px; line-height: 1.6; }
 
 .nj-zone-switch { position: absolute; z-index: 3; left: clamp(18px, 4vw, 58px); bottom: 68px; display: flex; gap: 8px; padding: 5px; background: rgba(9, 27, 32, .9); border: 1px solid rgba(226, 185, 126, .48); backdrop-filter: blur(14px); }

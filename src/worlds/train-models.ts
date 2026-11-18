@@ -9,13 +9,13 @@ app.innerHTML = `
     <div class="train-stage" aria-label="Three-dimensional Minecraft-style subway and Metro-North train models"></div>
     <div class="train-ui">
       <header class="train-header">
-        <a class="train-back" href="${import.meta.env.BASE_URL}worlds/clockwork-city/">← EARTH SIM (NEW YORK)</a>
+        <a class="train-back" href="${import.meta.env.BASE_URL}worlds/ambient-npcs/">← AMBIENT NPCs</a>
         <span class="train-kicker">SYSTEM ZERO / MODEL STUDY 01</span>
       </header>
       <section class="train-intro">
         <span class="train-eyebrow">BLOCK-BUILT ROLLING STOCK</span>
         <h1>METRO <span>&</span> SUBWAY</h1>
-        <p>Two static train models built from Minecraft-style blocks. Drag to orbit and scroll to inspect the details.</p>
+        <p>The Minecraft-style train models now run on mapped routes in Ambient NPCs. Drag to orbit and scroll to inspect them here.</p>
       </section>
       <div class="train-footer">
         <div class="train-selector" role="group" aria-label="Focus on a train model">
