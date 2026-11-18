@@ -57,7 +57,8 @@ export class NpcCrowdInstances {
   }
 
   npcIdFor(hit: THREE.Intersection): number | null {
-    if (hit.instanceId === undefined || ![this.body, this.head, this.legs].includes(hit.object as THREE.InstancedMesh))
+    if (hit.instanceId === undefined
+      || (hit.object !== this.body && hit.object !== this.head && hit.object !== this.legs))
       return null
     return this.ids[hit.instanceId] ?? null
   }
