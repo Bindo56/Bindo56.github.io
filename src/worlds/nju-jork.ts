@@ -815,10 +815,9 @@ function makeTile(rx: number, rz: number, data: Uint8ClampedArray,
   const maxZ = lod === 'detail' ? Math.min(width, Math.ceil((anchorZ + cropRadius - originZ) / step)) : width
   const rgbAt = (i: number, shade = 1): [number, number, number] => {
     const offset = i * 4
-    // The raster has broad black intersections. The mapped road and sidewalk
-    // meshes above it provide the actual street shape and visible pavement.
-    const oldRoad = heights[i] <= .1 && data[offset] === 0 && data[offset + 1] === 0 && data[offset + 2] === 0
-    const [r, g, b] = oldRoad ? [119, 124, 120] : [data[offset], data[offset + 1], data[offset + 2]]
+    // Keep the raster's dark road as a fallback wherever mapped road segments
+    // are missing or their smooth surface has not loaded yet.
+    const [r, g, b] = [data[offset], data[offset + 1], data[offset + 2]]
     return [srgbToLinear(r) * shade, srgbToLinear(g) * shade, srgbToLinear(b) * shade]
   }
   // Merge equal-height, equal-colour roof and street cells into rectangles.

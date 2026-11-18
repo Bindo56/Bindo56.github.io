@@ -13,7 +13,7 @@ type SurfaceGeometry = { positions: number[]; indices: number[] }
 // The road planes sit only a few centimetres above the voxel ground. Offset their
 // depth and draw them after the tile so the two surfaces do not shimmer at distance.
 const roadMaterial = new THREE.MeshBasicMaterial({
-  color: 0x242a2b, side: THREE.DoubleSide, fog: true,
+  color: 0x080808, side: THREE.DoubleSide, fog: true,
   depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8,
 })
 const footpathMaterial = new THREE.MeshBasicMaterial({

@@ -25,6 +25,7 @@ export class NpcCrowdInstances {
         const mesh = new THREE.InstancedMesh(geometry, material, this.capacity)
         mesh.name = `100 People FBX variant ${index}`
         mesh.count = 0
+        mesh.visible = false
         mesh.frustumCulled = false
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
         this.parent.add(mesh)
@@ -67,6 +68,7 @@ export class NpcCrowdInstances {
     }
     this.meshes.forEach((mesh, index) => {
       mesh.count = this.ids[index].length
+      mesh.visible = mesh.count > 0
       if (mesh.count) {
         mesh.instanceMatrix.needsUpdate = true
         if (mesh.morphTexture) mesh.morphTexture.needsUpdate = true
