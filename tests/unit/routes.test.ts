@@ -23,10 +23,10 @@ describe('shareable planet routes', () => {
     }
   })
 
-  it('opens Earth Sim (New York) directly from the NPC ECS world', () => {
+  it('opens Ambient NPCs directly from the NPC ECS world', () => {
     const planet = planetDefinitions.find(item => item.slug === 'npc-ecs')!
-    expect(planet.title).toBe('Earth Sim (New York)')
-    expect(pathForPlanet(planet)).toBe('/worlds/clockwork-city/')
+    expect(planet.title).toBe('Ambient NPCs')
+    expect(pathForPlanet(planet)).toBe('/worlds/ambient-npcs/')
   })
 
   it('recognizes home and rejects unknown or lookalike world paths', () => {
