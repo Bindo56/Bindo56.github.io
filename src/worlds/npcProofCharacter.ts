@@ -14,6 +14,7 @@ type Curve = { path: string; keys: number[][] }
 type Clip = { duration: number; rotation: Curve[]; position: Curve[]; visibility: Curve[] }
 type AnimationFile = { clips: Record<string, Clip> }
 type Assets = { variants: THREE.Object3D[]; clips: Record<string, Clip>; material: THREE.MeshBasicMaterial }
+export type ProofCrowdAssets = { geometries: THREE.BufferGeometry[]; material: THREE.MeshBasicMaterial }
 type Pose = { position: THREE.Vector3; quaternion: THREE.Quaternion; visible: boolean }
 type NodeState = { object: THREE.Object3D; base: Pose }
 type ActionDef = { clip: string; speed: number; pingPong?: boolean; upperBodyOnly?: boolean }
@@ -41,6 +42,7 @@ const actions: Record<string, ActionDef> = {
 }
 
 let cachedAssets: Promise<Assets> | undefined
+let cachedCrowdAssets: Promise<ProofCrowdAssets> | undefined
 
 function loadAssets(): Promise<Assets> {
   if (!cachedAssets) {
@@ -75,6 +77,51 @@ function loadAssets(): Promise<Assets> {
     })
   }
   return cachedAssets
+}
+
+/** Flatten the actual 100 People FBX variants for inexpensive crowd instancing. */
+export function loadProofCrowdAssets(): Promise<ProofCrowdAssets> {
+  if (!cachedCrowdAssets) cachedCrowdAssets = loadAssets().then((assets) => {
+    const geometries = assets.variants.map((source) => {
+      const model = source.clone(true)
+      model.position.set(0, 0, 0) // Match the detailed character's position and scale.
+      model.updateMatrixWorld(true)
+      const bounds = new THREE.Box3().setFromObject(model)
+      const height = bounds.getSize(new THREE.Vector3()).y
+      if (!Number.isFinite(height) || height <= 0) throw new Error(`Invalid crowd variant ${source.name}`)
+      const scale = BODY_HEIGHT / height
+      const positions: number[] = []
+      const uvs: number[] = []
+      const vertex = new THREE.Vector3()
+      model.traverseVisible((object) => {
+        if (!(object instanceof THREE.Mesh)) return
+        const geometry = object.geometry
+        const position = geometry.getAttribute('position')
+        if (!position) return
+        const uv = geometry.getAttribute('uv')
+        const indices = geometry.getIndex()
+        const count = indices?.count ?? position.count
+        for (let point = 0; point < count; point++) {
+          const index = indices?.getX(point) ?? point
+          vertex.set(position.getX(index), position.getY(index), position.getZ(index))
+            .applyMatrix4(object.matrixWorld)
+          positions.push(vertex.x * scale, (vertex.y - bounds.min.y) * scale, vertex.z * scale)
+          uvs.push(uv?.getX(index) ?? 0, uv?.getY(index) ?? 0)
+        }
+      })
+      if (!positions.length) throw new Error(`Crowd variant ${source.name} has no visible geometry`)
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+      geometry.computeBoundingSphere()
+      return geometry
+    })
+    return { geometries, material: assets.material }
+  }).catch((error) => {
+    cachedCrowdAssets = undefined
+    throw error
+  })
+  return cachedCrowdAssets
 }
 
 function basePose(object: THREE.Object3D): Pose {

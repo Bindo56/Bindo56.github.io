@@ -24,7 +24,7 @@ export class NpcPopulationFigures {
       depthTest: false, depthWrite: false }),
   )
   private readonly figures = new Map<number, ProofCharacter>()
-  private readonly crowd = new NpcCrowdInstances(this.group)
+  private readonly crowd = new NpcCrowdInstances(this.group, () => this.onChange())
   private readonly pending = new Set<number>()
   private readonly people = new Map<number, NearbyNpc>()
   private readonly positions = new Map<number, THREE.Vector3>()
