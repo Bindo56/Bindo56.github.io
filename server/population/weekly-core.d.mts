@@ -52,6 +52,8 @@ export interface NpcWeek {
 
 export const ZONE: string
 export function mix(seed: number, id: number, salt?: number): number
+export function attractionCandidate(npcId: number): boolean
+export function attractionSiteIndex(planSeed: number, weekday: number): number
 export function dateAt(localDate: string, days: number): string
 export function mondayOf(localDate: string): string
 export function planSeedForWeek(planSeed: number, weekStart: string): number

@@ -1,4 +1,5 @@
 import type { NearbyNpc, PopulationRequest, PopulationResponse, InspectedNpc } from './npcPopulationProtocol'
+import { streetFigureLimit } from '../../server/population/crowd-sites.mjs'
 
 const number = new Intl.NumberFormat('en-US')
 
@@ -13,7 +14,7 @@ function activityLabel(activity: string): string {
     meal_break: 'Taking a meal break', cafe_visit: 'Visiting a cafe',
     errand: 'Running an errand', leisure: 'Enjoying free time',
     social_meeting: 'Meeting someone', outdoor_break: 'Taking an outdoor break',
-    street_stroll: 'Walking around the neighborhood',
+    street_stroll: 'Walking around the neighborhood', tourist_visit: 'Exploring a landmark',
   }
   return labels[activity] ?? activity.replaceAll('_', ' ')
 }
@@ -65,7 +66,7 @@ export class NpcPopulation {
       <p class="nj-population-count">0 of 100,000 profiles loaded</p>
       <button class="nj-population-retry" type="button" hidden>RETRY LOADING</button>
       <div class="nj-population-detail" hidden></div>
-      <h3>Near the camera</h3><p class="nj-population-note">Select a person to see what they are doing and zoom to their location. People inside homes, offices, schools, shops, and cafes stay in their buildings. Walking characters use sidewalks and entrances. Tasks follow this browser’s city clock.</p>
+      <h3 class="nj-population-nearby-heading">Near the camera</h3><p class="nj-population-note">Select a person to see what they are doing and zoom to their location. People inside homes, offices, schools, shops, and cafes stay in their buildings. Walking characters use sidewalks and entrances. Tasks follow this browser’s city clock.</p>
       <div class="nj-population-list" aria-live="polite">Loading nearby NPCs…</div>`
     root.querySelector('.nj-ui')!.append(this.panel)
     this.status = this.panel.querySelector('.nj-population-status')!
@@ -160,7 +161,7 @@ export class NpcPopulation {
   update(x: number, z: number, viewHeight: number, now: number): void {
     this.lastX = x
     this.lastZ = z
-    const street = viewHeight < 200
+    const street = viewHeight < 300
     if (this.ready && (street || !this.panel.hidden) && (street && !this.wasStreet || now - this.lastQuery > 5000))
       this.refresh(x, z, street && !this.wasStreet, viewHeight)
     this.wasStreet = street
@@ -173,7 +174,8 @@ export class NpcPopulation {
     this.lastQuery = now
     this.requestId++
     this.post({ type: 'nearby', requestId: this.requestId, x, z,
-      radius: Math.max(135, Math.min(420, viewHeight * 1.5)), limit: 48, timeMs: this.timeMs(),
+      radius: Math.max(150, Math.min(500, viewHeight * 1.5)),
+      limit: streetFigureLimit(x, z) + 12, timeMs: this.timeMs(),
       followId: this.followingId || undefined })
     if (this.selectedId) this.inspect(this.selectedId)
   }
@@ -204,6 +206,8 @@ export class NpcPopulation {
     this.lastPeople = people
     this.onNearby(people)
     this.list.replaceChildren()
+    this.panel.querySelector('.nj-population-nearby-heading')!.textContent =
+      `Near the camera · ${people.filter((person) => person.outdoor).length} outdoors`
     if (!people.length) {
       this.list.textContent = 'No assigned NPC places are near this camera position. Pan toward mapped buildings.'
       return
@@ -245,12 +249,14 @@ export class NpcPopulation {
     const heading = document.createElement('h3')
     heading.textContent = person.name
     const summary = document.createElement('p')
+    const destination = person.current.activity === 'tourist_visit'
+      ? person.currentPlace : person.movement?.to.label
     summary.textContent = `${person.role.toUpperCase()} · ${person.localDate} · ${person.movement
-      ? `${person.movement.from.label} → ${person.movement.to.label}` : person.currentPlace}`
+      ? `${person.movement.from.label} → ${destination}` : person.currentPlace}`
     const current = document.createElement('p')
     current.className = 'nj-population-now'
     current.textContent = person.movement
-      ? `NOW ${clock(person.movement.startMinute)}–${clock(person.movement.endMinute)} · walking to ${person.movement.to.label}`
+      ? `NOW ${clock(person.movement.startMinute)}–${clock(person.movement.endMinute)} · walking to ${destination}`
       : `NOW ${clock(person.current.startMinute)}–${clock(person.current.endMinute)} · ${activityLabel(person.current.activity)}`
     const next = document.createElement('p')
     next.textContent = `NEXT ${clock(person.next.startMinute)} · ${activityLabel(person.next.activity)}`

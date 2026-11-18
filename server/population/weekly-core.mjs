@@ -1,3 +1,5 @@
+import { CROWD_SITES } from './crowd-sites.mjs'
+
 export const ZONE = 'America/New_York'
 const dateParts = new Intl.DateTimeFormat('en-US', {
   timeZone: ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -9,6 +11,12 @@ export function mix(seed, id, salt = 0) {
   value = Math.imul(value ^ (value >>> 16), 0x85ebca6b)
   value = Math.imul(value ^ (value >>> 13), 0xc2b2ae35)
   return (value ^ (value >>> 16)) >>> 0
+}
+
+export function attractionCandidate(npcId) { return mix(npcId, 0, 0x174) % 5 === 0 }
+
+export function attractionSiteIndex(planSeed, weekday) {
+  return mix(planSeed, weekday, 0x9a4) % CROWD_SITES.length
 }
 
 export function dateAt(localDate, days) {
@@ -101,8 +109,26 @@ export function fillDay(member, weekday) {
     cursor = item.endMinute
   }
   if (cursor < 1440) complete.push(segment(cursor, 1440, 'home', member.home_place_id, 'Uncommitted time'))
-  const withWalks = []
+  const visitDuration = 90 + mix(member.plan_seed, weekday, 0x68f) % 31
+  const visitWindows = attractionCandidate(member.npc_id) ? complete.filter((item) =>
+    item.activity === 'home' && Math.min(item.endMinute - 15, 22 * 60)
+      - Math.max(item.startMinute + 15, 9 * 60) >= visitDuration) : []
+  const visitWindow = visitWindows.length
+    ? visitWindows[mix(member.plan_seed, weekday, 0x40a) % visitWindows.length] : null
+  const withVisit = []
   for (const item of complete) {
+    if (item !== visitWindow) { withVisit.push(item); continue }
+    const earliest = Math.max(item.startMinute + 15, 9 * 60)
+    const latest = Math.min(item.endMinute - 15, 22 * 60) - visitDuration
+    const start = earliest + mix(member.plan_seed, weekday, 0x5bd) % (latest - earliest + 1)
+    const site = CROWD_SITES[attractionSiteIndex(member.plan_seed, weekday)]
+    if (item.startMinute < start) withVisit.push({ ...item, endMinute: start })
+    withVisit.push(segment(start, start + visitDuration, 'tourist_visit', site.placeId,
+      `Visiting ${site.label}`))
+    if (start + visitDuration < item.endMinute) withVisit.push({ ...item, startMinute: start + visitDuration })
+  }
+  const withWalks = []
+  for (const item of withVisit) {
     const duration = 30 + mix(member.plan_seed, weekday, item.startMinute ^ 0x51a) % 21
     const earliest = Math.max(item.startMinute + 15, 8 * 60)
     const latest = Math.min(item.endMinute - 15, bedtime - 20)

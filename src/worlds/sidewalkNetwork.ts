@@ -54,11 +54,13 @@ class MinQueue {
 /** Approximate pedestrian graph built from both sides of mapped streets and building entrances. */
 export class SidewalkNetwork {
   private readonly neighbors: Neighbor[][]
+  private readonly walkwayNeighbors: number[][]
   private readonly cache = new Map<string, WalkingRoute | null>()
   private readonly walkCells = new Map<string, number[]>()
   private readonly walkCellSize = 24
   constructor(readonly data: SidewalkData) {
     this.neighbors = Array.from({ length: data.nodes.length }, () => [])
+    this.walkwayNeighbors = Array.from({ length: data.nodes.length }, () => [])
     for (const [a, b] of data.edges) {
       const length = this.distance(a, b)
       this.neighbors[a].push({ id: b, length })
@@ -66,6 +68,8 @@ export class SidewalkNetwork {
     }
     for (let index = 0; index < data.walkways.length; index++) {
       const [a, b] = data.walkways[index]
+      this.walkwayNeighbors[a].push(b)
+      this.walkwayNeighbors[b].push(a)
       const [ax, az] = data.nodes[a], [bx, bz] = data.nodes[b]
       for (let x = Math.floor(Math.min(ax, bx) / this.walkCellSize); x <= Math.floor(Math.max(ax, bx) / this.walkCellSize); x++) {
         for (let z = Math.floor(Math.min(az, bz) / this.walkCellSize); z <= Math.floor(Math.max(az, bz) / this.walkCellSize); z++) {
@@ -76,6 +80,41 @@ export class SidewalkNetwork {
         }
       }
     }
+  }
+
+  /** A short deterministic walk along mapped pavement near a public destination. */
+  wanderRoute(x: number, z: number, seed: number, radius = 70): WalkingRoute | null {
+    const cellX = Math.floor(x / this.walkCellSize), cellZ = Math.floor(z / this.walkCellSize)
+    const reach = Math.ceil(radius / this.walkCellSize)
+    const candidates = new Set<number>()
+    for (let dx = -reach; dx <= reach; dx++) for (let dz = -reach; dz <= reach; dz++) {
+      for (const index of this.walkCells.get(`${cellX + dx},${cellZ + dz}`) ?? []) {
+        const [a, b] = this.data.walkways[index]
+        const [ax, az] = this.data.nodes[a], [bx, bz] = this.data.nodes[b]
+        if ((ax + bx - 2 * x) ** 2 + (az + bz - 2 * z) ** 2 <= 4 * radius * radius
+          && this.distance(a, b) > .5) candidates.add(index)
+      }
+    }
+    if (!candidates.size) return null
+    const choices = [...candidates]
+    const [a, b] = this.data.walkways[choices[(Math.imul(seed, 0x9e3779b1) >>> 0) % choices.length]]
+    let previous = a, current = b
+    const path = [a, b]
+    let length = this.distance(a, b)
+    for (let step = 0; step < 16 && length < 35; step++) {
+      const options = this.walkwayNeighbors[current].filter((id) => id !== previous)
+      if (!options.length) break
+      const next = options[(Math.imul(seed + step, 0x85ebca6b) >>> 0) % options.length]
+      length += this.distance(current, next)
+      path.push(next)
+      previous = current
+      current = next
+    }
+    const points = path.map((id) => ({ x: this.data.nodes[id][0], z: this.data.nodes[id][1] }))
+    const distances = [0]
+    for (let index = 1; index < path.length; index++)
+      distances.push(distances[index - 1] + this.distance(path[index - 1], path[index]))
+    return { points, distances, length: distances.at(-1)! }
   }
 
   /** Project a legacy street-cart point onto the nearest visible walkway. */
@@ -146,7 +185,7 @@ export class SidewalkNetwork {
     const distances = [0]
     for (let i = 1; i < path.length; i++) distances.push(distances[i - 1] + this.distance(path[i - 1], path[i]))
     const route = { points, distances, length: distances.at(-1)! }
-    if (this.cache.size >= 100) this.cache.clear()
+    if (this.cache.size >= 2048) this.cache.delete(this.cache.keys().next().value!)
     this.cache.set(key, route)
     return route
   }

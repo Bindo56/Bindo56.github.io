@@ -19,6 +19,7 @@ export type NearbyNpc = {
   x: number
   z: number
   distance: number
+  observedAtMs: number
   movement: NpcMovement | null
 }
 

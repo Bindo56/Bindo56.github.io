@@ -1,5 +1,7 @@
-import { fillDay, generateWeek, newYorkLocalTime, overlayMeeting, planSeedForWeek } from '../../server/population/weekly-core.mjs'
+import { attractionCandidate, attractionSiteIndex, fillDay, generateWeek, newYorkLocalTime,
+  overlayMeeting, planSeedForWeek } from '../../server/population/weekly-core.mjs'
 import type { NpcEpisode, NpcMeeting, NpcMember, NpcWeek } from '../../server/population/weekly-core.mjs'
+import { CROWD_SITES } from '../../server/population/crowd-sites.mjs'
 import type { NearbyNpc, PopulationRequest, PopulationResponse } from './npcPopulationProtocol'
 import { movementFor } from './npcMovement'
 
@@ -20,6 +22,7 @@ let cachePromise: Promise<IDBDatabase | null> | null = null
 const inFlight = new Map<string, Promise<unknown>>()
 const downloaded = new Set<string>()
 const active = new Map<string, StoredMember[]>()
+const visitors = new Map<number, StoredMember>()
 const daily = new Map<number, { localDate: string; episodes: NpcEpisode[] }>()
 const memberToShard = new Map<number, string>()
 const places = new Map<string, Place>()
@@ -158,7 +161,10 @@ async function loadShard(spec: ShardSpec, keepActive: boolean): Promise<void> {
   if (!downloaded.has(spec.id)) {
     downloaded.add(spec.id)
     loadedMembers += payload.members.length
-    for (const member of payload.members) memberToShard.set(member.npc_id, spec.id)
+    for (const member of payload.members) {
+      memberToShard.set(member.npc_id, spec.id)
+      if (attractionCandidate(member.npc_id)) visitors.set(member.npc_id, member)
+    }
     reportProgress()
   }
   if (keepActive) {
@@ -173,6 +179,8 @@ async function loadShard(spec: ShardSpec, keepActive: boolean): Promise<void> {
 }
 
 function memberById(id: number): StoredMember | null {
+  const visitor = visitors.get(id)
+  if (visitor) return visitor
   for (const rows of active.values()) {
     const member = rows.find((item) => item.npc_id === id)
     if (member) return member
@@ -264,23 +272,41 @@ async function nearby(message: Extract<PopulationRequest, { type: 'nearby' }>): 
       const state = dailyState(member, local, message.timeMs)
       const place = places.get(state.current.placeId)
       if (!place) return null
+      const site = state.current.activity === 'tourist_visit'
+        ? CROWD_SITES.find((item) => item.placeId === place.id) : undefined
       const x = state.movement
-        ? state.movement.from.x + (state.movement.to.x - state.movement.from.x) * state.movement.progress : place.x
+        ? state.movement.from.x + (state.movement.to.x - state.movement.from.x) * state.movement.progress
+        : site?.x ?? place.x
       const z = state.movement
-        ? state.movement.from.z + (state.movement.to.z - state.movement.from.z) * state.movement.progress : place.z
+        ? state.movement.from.z + (state.movement.to.z - state.movement.from.z) * state.movement.progress
+        : site?.z ?? place.z
       const distance = Math.hypot(x - message.x, z - message.z)
       if (!allowOutside && distance > message.radius) return null
       const outdoor = !!state.movement || state.current.activity === 'outdoor_break'
-        || state.current.activity === 'street_stroll'
+        || state.current.activity === 'street_stroll' || !!site
         || place.kind === 'park_access' || place.kind === 'station_access'
       return { npcId: member.npc_id, name: member.display_name, role: member.role,
         appearanceSeed: member.appearance_seed,
-        activity: state.movement ? `walking to ${state.movement.to.label}` : state.current.activity,
-        placeId: place.id, placeLabel: place.label, placeKind: place.kind, outdoor,
+        activity: state.movement ? `walking to ${site?.label ?? state.movement.to.label}` : state.current.activity,
+        placeId: place.id, placeLabel: site?.label ?? place.label, placeKind: place.kind, outdoor,
         movement: state.movement,
-        x, z, distance }
+        x, z, distance, observedAtMs: message.timeMs }
     }
+    const scanned = new Set<number>()
     for (const rows of active.values()) for (const member of rows) {
+      scanned.add(member.npc_id)
+      const person = personAt(member, false)
+      if (person) people.push(person)
+    }
+    const weekday = Math.round((Date.parse(`${local.localDate}T00:00:00Z`)
+      - Date.parse(`${local.weekStart}T00:00:00Z`)) / 86400000)
+    const nearbySites = new Set(CROWD_SITES.flatMap((site, index) =>
+      Math.hypot(site.x - message.x, site.z - message.z) <= site.radius + message.radius ? [index] : []))
+    if (nearbySites.size) for (const member of visitors.values()) {
+      if (scanned.has(member.npc_id)) continue
+      const seed = local.weekStart === manifest.firstWeek ? member.plan_seed
+        : planSeedForWeek(member.plan_seed, local.weekStart)
+      if (!nearbySites.has(attractionSiteIndex(seed, weekday))) continue
       const person = personAt(member, false)
       if (person) people.push(person)
     }
@@ -320,7 +346,10 @@ async function inspect(message: Extract<PopulationRequest, { type: 'inspect' }>)
     const label = (id: string) => places.get(id)?.label ?? id
     send({ type: 'inspect', requestId: message.requestId, result: {
       npcId: member.npc_id, name: member.display_name, role: member.role, localDate: state.local.localDate,
-      current: state.current, next: state.next, currentPlace: places.get(state.current.placeId)?.label ?? state.current.placeId,
+      current: state.current, next: state.next,
+      currentPlace: state.current.activity === 'tourist_visit'
+        ? CROWD_SITES.find((site) => site.placeId === state.current.placeId)?.label ?? state.current.placeId
+        : places.get(state.current.placeId)?.label ?? state.current.placeId,
       movement: state.movement,
       assignments: { home: label(member.home_place_id),
         work: member.work_place_id ? label(member.work_place_id) : null,
