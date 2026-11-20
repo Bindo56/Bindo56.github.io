@@ -7,7 +7,6 @@ export type SkyPalette = {
   sun: number
   cloudOpacity: number
   sunVisibility: number
-  starVisibility: number
 }
 
 /** A camera-centred sky that stays behind all world geometry without a texture download. */
@@ -27,7 +26,6 @@ export class SkyBox {
         sun: { value: new THREE.Color(palette.sun) },
         cloudOpacity: { value: palette.cloudOpacity },
         sunVisibility: { value: palette.sunVisibility },
-        starVisibility: { value: palette.starVisibility },
       },
       vertexShader: `
         varying vec3 direction;
@@ -44,36 +42,54 @@ export class SkyBox {
         uniform vec3 sun;
         uniform float cloudOpacity;
         uniform float sunVisibility;
-        uniform float starVisibility;
         varying vec3 direction;
 
         float hash(vec2 p) {
           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
         }
 
+        float noise(vec2 p) {
+          vec2 cell = floor(p);
+          vec2 blend = fract(p);
+          blend = blend * blend * (3.0 - 2.0 * blend);
+          return mix(
+            mix(hash(cell), hash(cell + vec2(1.0, 0.0)), blend.x),
+            mix(hash(cell + vec2(0.0, 1.0)), hash(cell + 1.0), blend.x),
+            blend.y
+          );
+        }
+
+        float cloudNoise(vec2 p) {
+          float value = 0.0;
+          float weight = 0.5;
+          for (int octave = 0; octave < 4; octave++) {
+            value += noise(p) * weight;
+            p = p * 2.03 + vec2(13.7, 8.3);
+            weight *= 0.5;
+          }
+          return value / 0.9375;
+        }
+
         void main() {
           vec3 ray = normalize(direction);
-          float height = smoothstep(-0.08, 0.88, ray.y);
+          float height = pow(smoothstep(-0.08, 0.95, ray.y), 0.7);
           vec3 color = mix(horizon, zenith, height);
 
-          // Broad, soft cloud bands stay sparse near the horizon.
-          float bands = sin(ray.x * 15.0 + ray.z * 7.0 + ray.y * 24.0) * 0.5
-                      + sin(ray.x * 34.0 - ray.z * 19.0 + ray.y * 13.0) * 0.25
-                      + sin(ray.x * 65.0 + ray.z * 41.0) * 0.125;
-          float clouds = smoothstep(0.22, 0.62, bands) * smoothstep(0.02, 0.26, ray.y);
-          color = mix(color, cloud, clouds * cloudOpacity);
-
-          vec3 sunDirection = normalize(vec3(0.55, 0.42, -0.72));
+          vec3 sunDirection = normalize(vec3(0.55, 0.62, -0.56));
           float facingSun = dot(ray, sunDirection);
-          color = mix(color, sun, smoothstep(0.89, 0.999, facingSun) * sunVisibility * 0.22);
-          color = mix(color, sun, smoothstep(0.9991, 0.9997, facingSun) * sunVisibility);
+          float sunGlow = pow(max(facingSun, 0.0), 24.0) * 0.22;
+          float sunDisc = smoothstep(0.99988, 0.99997, facingSun);
+          color = mix(color, sun, (sunGlow + sunDisc) * sunVisibility);
 
-          vec2 starUv = vec2(atan(ray.z, ray.x), asin(ray.y));
-          vec2 starGrid = starUv * vec2(210.0, 115.0);
-          vec2 cell = floor(starGrid);
-          float star = step(0.997, hash(cell));
-          float point = 1.0 - smoothstep(0.03, 0.16, length(fract(starGrid) - 0.5));
-          color += vec3(star * point * starVisibility * smoothstep(0.05, 0.4, ray.y));
+          // Project a cloud layer onto the upper hemisphere. Fractal noise gives
+          // irregular cumulus shapes without repeating bands or image seams.
+          vec2 cloudPosition = ray.xz / max(ray.y + 0.18, 0.12) * 2.6;
+          float broad = cloudNoise(cloudPosition);
+          float detail = cloudNoise(cloudPosition * 2.9 + vec2(31.4, 17.8));
+          float density = smoothstep(0.49, 0.64, broad * 0.78 + detail * 0.22);
+          float cloudFade = smoothstep(0.015, 0.15, ray.y);
+          vec3 cloudShade = mix(cloud * 0.82, cloud, clamp(ray.y * 0.55 + facingSun * 0.3 + 0.3, 0.0, 1.0));
+          color = mix(color, cloudShade, density * cloudFade * cloudOpacity);
 
           gl_FragColor = vec4(color, 1.0);
           #include <tonemapping_fragment>
@@ -99,7 +115,6 @@ export class SkyBox {
     ;(uniforms.sun.value as THREE.Color).setHex(palette.sun)
     uniforms.cloudOpacity.value = palette.cloudOpacity
     uniforms.sunVisibility.value = palette.sunVisibility
-    uniforms.starVisibility.value = palette.starVisibility
   }
 
   dispose(): void {

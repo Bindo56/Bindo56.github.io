@@ -126,11 +126,11 @@ let mappedKind = ''
 const mappedById = new Map<string, MappedPlace>()
 
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#152b31')
-scene.fog = new THREE.Fog('#152b31', 1800, 5400)
+scene.background = new THREE.Color('#c7dce9')
+scene.fog = new THREE.Fog('#c7dce9', 2400, 7000)
 const skyBox = new SkyBox({
-  zenith: 0x3a728c, horizon: 0x152b31, cloud: 0xa3b9bc, sun: 0xffd7a4,
-  cloudOpacity: 0.32, sunVisibility: 0.55, starVisibility: 0,
+  zenith: 0x418fca, horizon: 0xc7dce9, cloud: 0xffffff, sun: 0xfff4d6,
+  cloudOpacity: 0.88, sunVisibility: 1,
 })
 scene.add(skyBox.mesh)
 if (import.meta.hot) import.meta.hot.dispose(() => skyBox.dispose())
